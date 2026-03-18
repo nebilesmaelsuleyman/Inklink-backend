@@ -2,8 +2,10 @@ import torch
 import numpy as np
 from transformers import XLMRobertaTokenizer, XLMRobertaModel
 from sklearn.metrics.pairwise import cosine_similarity
+from pathlib import Path
 
-MODEL_PATH = "./model"
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = str(BASE_DIR / "model")
 
 tokenizer = XLMRobertaTokenizer.from_pretrained(MODEL_PATH)
 model = XLMRobertaModel.from_pretrained(MODEL_PATH)

@@ -1,0 +1,35 @@
+Yes.
+
+Run these **in the terminal inside the `moderation-service` folder**.
+
+1. Install dependencies
+
+```
+pip install -r requirements.txt
+```
+
+2. Download the model
+
+```
+python download_model.py
+```
+
+3. Process the golden dataset (creates embeddings)
+
+```
+python preprocess_golden.py
+```
+
+4. Start the moderation API (using FastAPI)
+
+```
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+After that the service runs at:
+
+```
+http://localhost:8000/moderate
+```
+
+Your NestJS backend can now send moderation requests to it.
