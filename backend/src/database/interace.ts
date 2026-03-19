@@ -1,12 +1,10 @@
 export interface DatabaseConfig {
   uri: string;
   dbName: string;
-  options?: MongoConnectionOptions;  }
-
+  options?: MongoConnectionOptions;
+}
 
 export interface MongoConnectionOptions {
-  useNewUrlParser: boolean;
-  useUnifiedTopology: boolean;
   maxPoolSize: number;
   serverSelectionTimeoutMS: number;
   socketTimeoutMS: number;
