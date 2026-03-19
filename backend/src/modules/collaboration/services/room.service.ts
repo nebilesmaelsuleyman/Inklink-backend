@@ -35,5 +35,12 @@ export class RoomService {
         return room;
     }
     
+    private encodeMessage(type:MessageType,payload:Uint8Array){
+        const encoder = encoding.createEncoder();
+        encoding.writeVarUint(encoder,type);
+        encoding.writeVarUint8Array(encoder,payload);
+        return encoding.toUint8Array(encoder);
+
+    }
 
 }
