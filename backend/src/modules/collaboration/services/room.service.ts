@@ -42,7 +42,7 @@ export class RoomService {
         return encoding.toUint8Array(encoder);
 
     }
-    
+
     broadcast(room:IRoom, message:Uint8Array){
         room.connections.forEach((conn)=>{
             if(conn.readyState === WebSocket.OPEN){
@@ -55,5 +55,13 @@ export class RoomService {
             }
         })
     }
-
+removeConnections(roomName:string , conne:WebSocket){
+    const room = this.rooms.get(roomName);
+    if(room){
+        room.connections.delete(conne);
+        if(room.connections.size === 0){
+            this.rooms.delete(roomName);
+        }
+}
+}
 }
