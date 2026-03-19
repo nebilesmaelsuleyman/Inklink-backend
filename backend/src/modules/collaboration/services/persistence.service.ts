@@ -20,8 +20,6 @@ export class PersistenceService {
         }
         return new Y.Doc();
     }
-
-
     async saveDocument(roomName: string, ydoc: Y.Doc): Promise<void> {
 
         const state= Y.encodeStateAsUpdate(ydoc);
