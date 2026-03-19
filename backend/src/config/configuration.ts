@@ -1,7 +1,7 @@
 export default () => ({
     database: {
-        uri: process.env.MONGODB_URI || 'mongodb+srv://InkLink:InkLink@cluster0.ramuxrb.mongodb.net/InkLink?appName=Cluster0',
-        dbName: process.env.dbName || 'InkLink'
+        uri: (process.env.MONGODB_URI || process.env.DB_URL || process.env.DB_URI || '').trim(),
+        dbName: (process.env.DB_NAME || process.env.dbName || 'InkLink').trim()
     },
-    port: process.env.PORT || 4000,
+    port: Number.parseInt((process.env.PORT || '4000').trim(), 10) || 4000,
 });

@@ -4,6 +4,14 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
 import configuration from './config/configuration';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { CollaborationModule } from './modules/collaboration/collaboration.module';
+import { config as loadEnv } from 'dotenv';
+
+loadEnv({ path: '.env' });
+
+const optionalImports = process.env.DISABLE_DB === 'true' ? [] : [DatabaseModule];
 
 @Module({
   imports: [
@@ -12,7 +20,10 @@ import configuration from './config/configuration';
       envFilePath: '.env',
       load: [configuration],
     }),
-    DatabaseModule,
+    ...optionalImports,
+    AuthModule,
+    UsersModule,
+    CollaborationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
