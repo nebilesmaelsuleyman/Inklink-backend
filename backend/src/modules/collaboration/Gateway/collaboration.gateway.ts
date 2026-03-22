@@ -6,6 +6,10 @@ import {
 import { RoomService } from '../services/room.service';
 import { RawData, WebSocket } from 'ws';
 import * as Y from 'yjs';
+import { MessageProtocol, MessageType } from '../protocol/message.protocol';
+import * as awarenessProtocol from 'y-protocols/awareness';
+
+
 
 @WebSocketGateway({ path: '/collab' })
 export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -66,11 +70,28 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
     });
   }
 
-  private async handleTextMessage(roomName: string, client: WebSocket, text: string) {
+  private async handleTextMessage(roomName: string, client: WebSocket, data: Uint8Array) {
     const room = await this.roomService.getOrCreate(roomName);
-    const trimmed = text.trim();
+    const {type, payload}=MessageProtocol.decode(data)
+    
+    switch(type){
+      case MessageType.Sync:
+        try {
+          Y.applyUpdate(room.doc, payload);
+        } catch {
+          // Don't crash the server if a client sends invalid binary frames.
+          return;
+        }
+        break;
+      case MessageType.Awareness:
+        awarenessProtocol.applyAwarenessUpdate(room.awareness, payload, client);
+        break;
+    }
+    
+    const trimmed = (typeof data === 'string' ? data : data.toString()).trim();
     if (!trimmed) return;
 
+    
     // For debugging with tools like `wscat`, broadcast plain text to other clients.
     room.connections.forEach((conn) => {
       if (conn !== client && conn.readyState === WebSocket.OPEN) {
@@ -79,6 +100,7 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
     });
   }
 
+  
   private extractRoom(req: any): string {
     const url = new URL(req.url, 'http://localhost');
     return url.searchParams.get('room') || 'default';
