@@ -1,4 +1,9 @@
-import { Injectable, OnModuleDestroy, OnModuleInit, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+  Logger,
+} from '@nestjs/common';
 import * as mongoose from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 
@@ -43,11 +48,15 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       // Establish the connection and store the reference
       const conn = await mongoose.connect(config.uri, options);
       this.connection = conn.connection;
-      
+
       this.logger.log(`MongoDB Atlas connection established: ${config.dbName}`);
-      
-      this.connection.on('error', (err) => this.logger.error(`MongoDB Error: ${err}`));
-      this.connection.on('disconnected', () => this.logger.warn('MongoDB disconnected'));
+
+      this.connection.on('error', (err) =>
+        this.logger.error(`MongoDB Error: ${err}`),
+      );
+      this.connection.on('disconnected', () =>
+        this.logger.warn('MongoDB disconnected'),
+      );
     } catch (error) {
       this.logger.error(`Failed to connect to MongoDB: ${error.message}`);
       throw error;

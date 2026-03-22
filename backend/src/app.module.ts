@@ -11,7 +11,8 @@ import { config as loadEnv } from 'dotenv';
 
 loadEnv({ path: '.env' });
 
-const optionalImports = process.env.DISABLE_DB === 'true' ? [] : [DatabaseModule];
+const optionalImports =
+  process.env.DISABLE_DB === 'true' ? [] : [DatabaseModule];
 
 @Module({
   imports: [

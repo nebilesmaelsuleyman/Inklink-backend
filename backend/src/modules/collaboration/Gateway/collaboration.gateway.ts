@@ -1,7 +1,7 @@
 import {
   WebSocketGateway,
   OnGatewayConnection,
-  OnGatewayDisconnect
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { RoomService } from '../services/room.service';
 import { RawData, WebSocket } from 'ws';
@@ -9,10 +9,10 @@ import * as Y from 'yjs';
 import { MessageProtocol, MessageType } from '../protocol/message.protocol';
 import * as awarenessProtocol from 'y-protocols/awareness';
 
-
-
 @WebSocketGateway({ path: '/collab' })
-export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class CollaborationGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly clientRooms = new WeakMap<WebSocket, string>();
 
   constructor(private readonly roomService: RoomService) {}
@@ -25,17 +25,29 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
 
     // initial sync
     const state = Y.encodeStateAsUpdate(room.doc);
-    client.send(state);
+    client.send(MessageProtocol.encode(MessageType.Sync, state));
+
+    // initial awareness (if any)
+    const awarenessClientIds = Array.from(room.awareness.getStates().keys()) as number[];
+    if (awarenessClientIds.length > 0) {
+      const awarenessUpdate = awarenessProtocol.encodeAwarenessUpdate(
+        room.awareness,
+        awarenessClientIds,
+      );
+      client.send(
+        MessageProtocol.encode(MessageType.Awareness, awarenessUpdate),
+      );
+    }
 
     client.on('message', (data: RawData, isBinary: boolean) => {
       if (!isBinary) {
         const text = typeof data === 'string' ? data : data.toString();
-        this.handleTextMessage(roomName, client, text);
+        this.handlePlainTextMessage(roomName, client, text);
         return;
       }
 
-      const update = this.asUint8Array(data);
-      this.handleBinaryMessage(roomName, client, update);
+      const message = this.asUint8Array(data);
+      this.handleBinaryMessage(roomName, client, message);
     });
   }
 
@@ -50,48 +62,36 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
   private async handleBinaryMessage(
     roomName: string,
     client: WebSocket,
-    data: Uint8Array
+    data: Uint8Array,
   ) {
     const room = await this.roomService.getOrCreate(roomName);
 
     try {
-      // Apply incoming Yjs update
-      Y.applyUpdate(room.doc, data);
+      const { type, payload } = MessageProtocol.decode(data);
+      switch (type) {
+        case MessageType.Sync:
+          Y.applyUpdate(room.doc, payload, client);
+          break;
+        case MessageType.Awareness:
+          awarenessProtocol.applyAwarenessUpdate(room.awareness, payload, client);
+          break;
+      }
     } catch {
-      // Don't crash the server if a client sends invalid binary frames.
+      // ignore invalid messages
       return;
     }
-
-    // Broadcast to other clients in the room
-    room.connections.forEach((conn) => {
-      if (conn !== client && conn.readyState === WebSocket.OPEN) {
-        conn.send(data);
-      }
-    });
   }
 
-  private async handleTextMessage(roomName: string, client: WebSocket, data: Uint8Array) {
+  private async handlePlainTextMessage(
+    roomName: string,
+    client: WebSocket,
+    data: string,
+  ) {
     const room = await this.roomService.getOrCreate(roomName);
-    const {type, payload}=MessageProtocol.decode(data)
-    
-    switch(type){
-      case MessageType.Sync:
-        try {
-          Y.applyUpdate(room.doc, payload);
-        } catch {
-          // Don't crash the server if a client sends invalid binary frames.
-          return;
-        }
-        break;
-      case MessageType.Awareness:
-        awarenessProtocol.applyAwarenessUpdate(room.awareness, payload, client);
-        break;
-    }
-    
-    const trimmed = (typeof data === 'string' ? data : data.toString()).trim();
+
+    const trimmed = data.trim();
     if (!trimmed) return;
 
-    
     // For debugging with tools like `wscat`, broadcast plain text to other clients.
     room.connections.forEach((conn) => {
       if (conn !== client && conn.readyState === WebSocket.OPEN) {
@@ -100,7 +100,6 @@ export class CollaborationGateway implements OnGatewayConnection, OnGatewayDisco
     });
   }
 
-  
   private extractRoom(req: any): string {
     const url = new URL(req.url, 'http://localhost');
     return url.searchParams.get('room') || 'default';
