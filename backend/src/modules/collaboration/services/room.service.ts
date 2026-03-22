@@ -3,6 +3,9 @@ import { WebSocket } from 'ws';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
 import { IRoom } from '../interface/room.interface';
+import * as awarenessProtocol from 'y-protocols/awareness';
+import { MessageProtocol, MessageType } from '../protocol/message.protocol';
+
 
 @Injectable()
 export class RoomService {
@@ -19,6 +22,19 @@ export class RoomService {
         connections: new Set(),
         createdAt: new Date(),
       };
+      doc.on('update',(update: Uint8Array) => {
+        const message= MessageProtocol.encode(MessageType.Sync, update);
+        this.broadcast(room!, message);
+      })
+        room.awareness.on('update', ({ added, updated, removed }, origin) => {
+          if (origin === null) {
+            const message = MessageProtocol.encode(
+              MessageType.Awareness,
+              awarenessProtocol.encodeAwarenessUpdate(room!.awareness, added.concat(updated, removed))
+            );
+            this.broadcast(room!, message);
+          }
+        });
       this.rooms.set(roomName, room);
     }
     return room;
