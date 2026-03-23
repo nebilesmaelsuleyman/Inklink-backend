@@ -7,12 +7,13 @@ import configuration from './config/configuration';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { CollaborationModule } from './modules/collaboration/collaboration.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { config as loadEnv } from 'dotenv';
 
 loadEnv({ path: '.env' });
 
 const optionalImports =
-  process.env.DISABLE_DB === 'true' ? [] : [DatabaseModule];
+  process.env.DISABLE_DB === 'true' ? [] : [DatabaseModule, ChatModule];
 
 @Module({
   imports: [

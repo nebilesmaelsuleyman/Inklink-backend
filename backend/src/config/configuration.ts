@@ -9,4 +9,7 @@ export default () => ({
     dbName: (process.env.DB_NAME || process.env.dbName || 'InkLink').trim(),
   },
   port: Number.parseInt((process.env.PORT || '4000').trim(), 10) || 4000,
+  chat: {
+    internalKey: (process.env.CHAT_INTERNAL_KEY || '').trim(),
+  },
 });
