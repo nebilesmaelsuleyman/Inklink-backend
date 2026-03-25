@@ -40,73 +40,76 @@ export class LibraryService {
     workId: string,
     progress: number,
   ) {
-    let library = await this.libraryModel.findOne({ userId });
-    if (!library) {
-      library = await this.libraryModel.create({ userId });
-    }
-
     const workObjectId = new Types.ObjectId(workId);
-    
-    // Filter out if already exists to move it to the front
-    const updatedList = library.currentlyReading.filter(
-      (cr) => cr.workId.toString() !== workId,
+
+    // 1. Remove the work from the list if it exists to move it to the front later
+    await this.libraryModel.updateOne(
+      { userId },
+      { $pull: { currentlyReading: { workId: workObjectId } } },
     );
 
-    // Add to the front
-    updatedList.unshift({ workId: workObjectId, progress });
+    // 2. Add it to the front with new progress
+    // Using findOneAndUpdate with upsert: true ensures the library document exists
+    await this.libraryModel.findOneAndUpdate(
+      { userId },
+      {
+        $push: {
+          currentlyReading: {
+            $each: [{ workId: workObjectId, progress }],
+            $position: 0,
+          },
+        },
+      },
+      { upsert: true, new: true },
+    );
 
-    library.currentlyReading = updatedList as any;
-
-    await library.save();
     return this.getLibrary(userId);
   }
 
   async toggleBookmark(userId: string, workId: string) {
-    let library = await this.libraryModel.findOne({ userId });
-    if (!library) {
-      library = await this.libraryModel.create({ userId });
-    }
-
     const workObjectId = new Types.ObjectId(workId);
-    const index = library.bookmarked.findIndex(
-      (id) => id.toString() === workId,
+
+    // Attempt to remove the workId. If it was removed, it was already there.
+    const result = await this.libraryModel.updateOne(
+      { userId, bookmarked: workObjectId },
+      { $pull: { bookmarked: workObjectId } },
     );
 
-    if (index > -1) {
-      library.bookmarked.splice(index, 1);
-    } else {
-      library.bookmarked.push(workObjectId);
+    if (result.matchedCount === 0) {
+      // It wasn't there (or library doesn't exist), so add it.
+      // findOneAndUpdate with upsert: true handles both adding and creation.
+      await this.libraryModel.findOneAndUpdate(
+        { userId },
+        { $addToSet: { bookmarked: workObjectId } },
+        { upsert: true },
+      );
     }
 
-    await library.save();
     return this.getLibrary(userId);
   }
 
   async createReadList(userId: string, name: string, description: string) {
-    let library = await this.libraryModel.findOne({ userId });
-    if (!library) {
-      library = await this.libraryModel.create({ userId });
-    }
-
-    library.readLists.push({
-      name,
-      description,
-      works: [],
-    });
-
-    await library.save();
+    await this.libraryModel.findOneAndUpdate(
+      { userId },
+      {
+        $push: {
+          readLists: { name, description, works: [] },
+        },
+      },
+      { upsert: true },
+    );
     return this.getLibrary(userId);
   }
 
   async deleteReadList(userId: string, listId: string) {
-    const library = await this.libraryModel.findOne({ userId });
-    if (!library) throw new NotFoundException('Library not found');
-
-    library.readLists = library.readLists.filter(
-      (list) => list._id?.toString() !== listId,
+    const listObjectId = new Types.ObjectId(listId);
+    const result = await this.libraryModel.updateOne(
+      { userId },
+      { $pull: { readLists: { _id: listObjectId } } },
     );
+    if (result.matchedCount === 0)
+      throw new NotFoundException('Library not found');
 
-    await library.save();
     return this.getLibrary(userId);
   }
 
@@ -120,24 +123,30 @@ export class LibraryService {
   }
 
   async toggleWorkInReadList(userId: string, listId: string, workId: string) {
-    const library = await this.libraryModel.findOne({ userId });
-    if (!library) throw new NotFoundException('Library not found');
-
-    const list = library.readLists.find(
-      (list) => list._id?.toString() === listId,
-    );
-    if (!list) throw new NotFoundException('Reading list not found');
-
     const workObjectId = new Types.ObjectId(workId);
-    const index = list.works.findIndex((id) => id.toString() === workId);
+    const listObjectId = new Types.ObjectId(listId);
 
-    if (index > -1) {
-      list.works.splice(index, 1);
-    } else {
-      list.works.push(workObjectId);
+    // Try to pull if exists
+    const pullResult = await this.libraryModel.updateOne(
+      {
+        userId,
+        'readLists._id': listObjectId,
+        'readLists.works': workObjectId,
+      },
+      { $pull: { 'readLists.$.works': workObjectId } },
+    );
+
+    if (pullResult.matchedCount === 0) {
+      // Not there, so push
+      const pushResult = await this.libraryModel.updateOne(
+        { userId, 'readLists._id': listObjectId },
+        { $addToSet: { 'readLists.$.works': workObjectId } },
+      );
+      if (pushResult.matchedCount === 0) {
+        throw new NotFoundException('Library or Reading list not found');
+      }
     }
 
-    await library.save();
     return this.getLibrary(userId);
   }
 }
