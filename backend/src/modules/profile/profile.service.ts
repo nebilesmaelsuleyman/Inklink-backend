@@ -85,7 +85,7 @@ export class ProfileService {
       const userUpdates: any = {};
       if (updates.username) userUpdates.username = updates.username;
       if (updates.password) userUpdates.password = updates.password;
-      
+
       await this.usersService.update(userId, userUpdates);
     }
 
