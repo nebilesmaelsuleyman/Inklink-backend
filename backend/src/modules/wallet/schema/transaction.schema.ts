@@ -18,9 +18,18 @@ export interface TransactionDocument extends Document {
 
 export const TransactionSchema = new Schema<TransactionDocument>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
     amount: { type: Number, required: true },
-    type: { type: String, enum: Object.values(TransactionType), required: true },
+    type: {
+      type: String,
+      enum: Object.values(TransactionType),
+      required: true,
+    },
     description: { type: String, required: true },
   },
   { timestamps: true },

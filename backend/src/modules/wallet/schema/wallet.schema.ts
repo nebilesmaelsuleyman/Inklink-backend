@@ -12,7 +12,12 @@ export interface WalletDocument extends Document {
 
 export const WalletSchema = new Schema<WalletDocument>(
   {
-    userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      unique: true,
+    },
     balance: { type: Number, default: 0 },
     adRevenue: { type: Number, default: 0 },
     premiumRevenue: { type: Number, default: 0 },
