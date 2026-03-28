@@ -2,29 +2,35 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { WalletDocument } from './schema/wallet.schema';
-import { TransactionDocument, TransactionType } from './schema/transaction.schema';
+import {
+  TransactionDocument,
+  TransactionType,
+} from './schema/transaction.schema';
 
 @Injectable()
 export class WalletService {
   constructor(
     @InjectModel('Wallet') private readonly walletModel: Model<WalletDocument>,
-    @InjectModel('Transaction') private readonly transactionModel: Model<TransactionDocument>,
+    @InjectModel('Transaction')
+    private readonly transactionModel: Model<TransactionDocument>,
   ) {}
 
   async getWallet(userId: string) {
-    const wallet = await this.walletModel.findOneAndUpdate(
-      { userId: new Types.ObjectId(userId) },
-      {
-        $setOnInsert: {
-          userId: new Types.ObjectId(userId),
-          balance: 0,
-          adRevenue: 0,
-          premiumRevenue: 0,
-          donationRevenue: 0,
+    const wallet = await this.walletModel
+      .findOneAndUpdate(
+        { userId: new Types.ObjectId(userId) },
+        {
+          $setOnInsert: {
+            userId: new Types.ObjectId(userId),
+            balance: 0,
+            adRevenue: 0,
+            premiumRevenue: 0,
+            donationRevenue: 0,
+          },
         },
-      },
-      { upsert: true, returnDocument: 'after' },
-    ).exec();
+        { upsert: true, returnDocument: 'after' },
+      )
+      .exec();
     return wallet;
   }
 
@@ -36,16 +42,21 @@ export class WalletService {
       .exec();
   }
 
-  async addRevenue(userId: string, amount: number, type: TransactionType, description: string) {
+  async addRevenue(
+    userId: string,
+    amount: number,
+    type: TransactionType,
+    description: string,
+  ) {
     const wallet = await this.getWallet(userId);
-    
+
     const update: any = { $inc: { balance: amount } };
     if (type === TransactionType.AD) update.$inc.adRevenue = amount;
     if (type === TransactionType.PREMIUM) update.$inc.premiumRevenue = amount;
     if (type === TransactionType.DONATION) update.$inc.donationRevenue = amount;
 
     await this.walletModel.updateOne({ _id: wallet._id }, update).exec();
-    
+
     return this.transactionModel.create({
       userId: new Types.ObjectId(userId),
       amount,
