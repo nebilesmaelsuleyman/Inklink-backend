@@ -56,25 +56,30 @@ export class ChapaService {
 
   constructor(private readonly configService: ConfigService) {
     this.secretKey = (
-      this.configService.get<string>('CHAPA_SECRET_KEY') || 
+      this.configService.get<string>('CHAPA_SECRET_KEY') ||
       process.env.CHAPA_SECRET_KEY ||
       this.configService.get<string>('Test_secret_key') ||
       process.env.Test_secret_key ||
       'CHASECK_TEST-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
     ).trim();
 
-    console.log('[ChapaService] Secret Key loaded:', 
-      this.secretKey.startsWith('CHASECK_TEST-') ? 'Valid Format' : 'INVALID FORMAT',
-      this.secretKey.substring(0, 15) + '...'
+    console.log(
+      '[ChapaService] Secret Key loaded:',
+      this.secretKey.startsWith('CHASECK_TEST-')
+        ? 'Valid Format'
+        : 'INVALID FORMAT',
+      this.secretKey.substring(0, 15) + '...',
     );
   }
 
   /** Initialize a payment and get Chapa's hosted checkout URL */
-  async initializePayment(payload: ChapaInitPayload): Promise<ChapaInitResponse> {
+  async initializePayment(
+    payload: ChapaInitPayload,
+  ): Promise<ChapaInitResponse> {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
-      
+
       const response = await fetch(`${this.baseUrl}/transaction/initialize`, {
         method: 'POST',
         headers: {
@@ -88,17 +93,20 @@ export class ChapaService {
         signal: controller.signal,
       });
       clearTimeout(timeout);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('[ChapaService] API Error Data:', errorData);
-        const errorMessage = typeof errorData.message === 'string' 
-          ? errorData.message 
-          : JSON.stringify(errorData.message || errorData);
-        throw new Error(errorMessage || `HTTP error! status: ${response.status}`);
+        const errorMessage =
+          typeof errorData.message === 'string'
+            ? errorData.message
+            : JSON.stringify(errorData.message || errorData);
+        throw new Error(
+          errorMessage || `HTTP error! status: ${response.status}`,
+        );
       }
-      
-      return await response.json() as ChapaInitResponse;
+
+      return (await response.json()) as ChapaInitResponse;
     } catch (error: any) {
       const message = error.message || 'Payment initialization failed';
       console.error('[ChapaService] Initialize failed:', message);
@@ -112,21 +120,26 @@ export class ChapaService {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
 
-      const response = await fetch(`${this.baseUrl}/transaction/verify/${txRef}`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${this.secretKey}`,
+      const response = await fetch(
+        `${this.baseUrl}/transaction/verify/${txRef}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${this.secretKey}`,
+          },
+          signal: controller.signal,
         },
-        signal: controller.signal,
-      });
+      );
       clearTimeout(timeout);
-      
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        throw new Error(
+          errorData.message || `HTTP error! status: ${response.status}`,
+        );
       }
 
-      return await response.json() as ChapaVerifyResponse;
+      return (await response.json()) as ChapaVerifyResponse;
     } catch (error: any) {
       const message = error.message || 'Payment verification failed';
       console.error('[ChapaService] Verify failed:', message);

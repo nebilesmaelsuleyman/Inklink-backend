@@ -57,9 +57,9 @@ export class SubscriptionController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.subscriptionService.initSubscriptionPayment(
-      request.user.sub, 
-      dto.plan, 
-      returnUrl || 'http://localhost:3000/dashboard'
+      request.user.sub,
+      dto.plan,
+      returnUrl || 'http://localhost:3000/dashboard',
     );
   }
 
@@ -75,12 +75,11 @@ export class SubscriptionController {
 
   @UseGuards(OptionalJwtAuthGuard)
   @Get('chapters/:chapterId/access')
-  @ApiOperation({ summary: 'Check if user can read a chapter (free/purchased/subscribed)' })
+  @ApiOperation({
+    summary: 'Check if user can read a chapter (free/purchased/subscribed)',
+  })
   @ApiParam({ name: 'chapterId', description: 'Chapter id' })
-  checkAccess(
-    @Param('chapterId') chapterId: string,
-    @Req() request: any,
-  ) {
+  checkAccess(@Param('chapterId') chapterId: string, @Req() request: any) {
     const userId = request.user?.sub;
     return this.subscriptionService.checkAccess(chapterId, userId);
   }
@@ -96,16 +95,24 @@ export class SubscriptionController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.subscriptionService.initChapterPurchasePayment(
-      chapterId, 
+      chapterId,
       request.user.sub,
-      returnUrl || `http://localhost:3000/book/chapter/${chapterId}`
+      returnUrl || `http://localhost:3000/book/chapter/${chapterId}`,
     );
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('donations')
   @ApiOperation({ summary: 'Donate to an author' })
-  @ApiBody({ schema: { properties: { authorId: { type: 'string' }, amount: { type: 'number' }, returnUrl: { type: 'string' } } } })
+  @ApiBody({
+    schema: {
+      properties: {
+        authorId: { type: 'string' },
+        amount: { type: 'number' },
+        returnUrl: { type: 'string' },
+      },
+    },
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   donate(
     @Body('authorId') authorId: string,
@@ -117,7 +124,7 @@ export class SubscriptionController {
       authorId,
       request.user.sub,
       amount,
-      returnUrl || 'http://localhost:3000/home'
+      returnUrl || 'http://localhost:3000/home',
     );
   }
 
@@ -125,9 +132,7 @@ export class SubscriptionController {
 
   @Get('payments/callback')
   @ApiOperation({ summary: 'Chapa webhook/callback to verify payment' })
-  async paymentCallback(
-    @Req() request: any,
-  ) {
+  async paymentCallback(@Req() request: any) {
     // Chapa might send the tx_ref in the query or body depending on webhook vs redirect
     const txRef = request.query.trx_ref || request.body?.trx_ref;
     if (!txRef) {
