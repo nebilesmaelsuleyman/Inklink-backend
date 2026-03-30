@@ -25,7 +25,10 @@ import {
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
 import { USER_MODEL_NAME, UserDocument } from '../users/user.schema';
 import { WalletService } from '../wallet/wallet.service';
-import { TransactionDocument, TransactionType } from '../wallet/schema/transaction.schema';
+import {
+  TransactionDocument,
+  TransactionType,
+} from '../wallet/schema/transaction.schema';
 import { ChapaService } from './chapa.service';
 
 import { promises as fs } from 'fs';
@@ -68,14 +71,16 @@ export class SubscriptionService {
     private readonly chapaService: ChapaService,
   ) {}
 
-  private async getDynamicPricing(): Promise<Record<string, { price: number; days: number }>> {
+  private async getDynamicPricing(): Promise<
+    Record<string, { price: number; days: number }>
+  > {
     try {
       const raw = await fs.readFile(this.pricingPath, 'utf-8');
       const parsed = JSON.parse(raw) as { plans?: any[] };
       const pricing: any = {};
-      
+
       if (parsed.plans && Array.isArray(parsed.plans)) {
-        parsed.plans.forEach(plan => {
+        parsed.plans.forEach((plan) => {
           let days = 30;
           if (plan.id === 'weekly') days = 7;
           if (plan.id === 'yearly') days = 365;
@@ -84,7 +89,10 @@ export class SubscriptionService {
         return pricing;
       }
     } catch (err) {
-      console.warn('[SubscriptionService] Could not read dynamic pricing, using defaults:', err.message);
+      console.warn(
+        '[SubscriptionService] Could not read dynamic pricing, using defaults:',
+        err.message,
+      );
     }
     return DEFAULT_PRICING;
   }
@@ -101,7 +109,11 @@ export class SubscriptionService {
   async getActiveSubscription(userId: string) {
     const now = new Date();
     await this.subscriptionModel.updateMany(
-      { userId: this.toObjectId(userId), status: 'active', endDate: { $lt: now } },
+      {
+        userId: this.toObjectId(userId),
+        status: 'active',
+        endDate: { $lt: now },
+      },
       { $set: { status: 'expired' } },
     );
 
@@ -157,8 +169,10 @@ export class SubscriptionService {
       (process.env.backendHost || 'http://localhost:4000') +
       '/payments/callback';
 
-    const email = (user as any)?.email || `${((user as any)?.username || 'user').replace(/\s+/g, '')}@inklink.app`;
-    
+    const email =
+      (user as any)?.email ||
+      `${((user as any)?.username || 'user').replace(/\s+/g, '')}@inklink.app`;
+
     console.log('[SubscriptionService] Initializing payment with payload:', {
       amount: config.price,
       email,
@@ -235,7 +249,7 @@ export class SubscriptionService {
     }
 
     const pricing = await this.getDynamicPricing();
-    const config = pricing[pending.plan as SubscriptionPlan];
+    const config = pricing[pending.plan];
     const now = new Date();
     const endDate = new Date(now.getTime() + config.days * 24 * 60 * 60 * 1000);
 
@@ -309,11 +323,21 @@ export class SubscriptionService {
     const price = chapter.price || 0;
 
     if (price === 0) {
-      return { hasAccess: true, accessType: 'free', price: 0, isPremiumSubscriber: false };
+      return {
+        hasAccess: true,
+        accessType: 'free',
+        price: 0,
+        isPremiumSubscriber: false,
+      };
     }
 
     if (!userId) {
-      return { hasAccess: false, accessType: 'none', price, isPremiumSubscriber: false };
+      return {
+        hasAccess: false,
+        accessType: 'none',
+        price,
+        isPremiumSubscriber: false,
+      };
     }
 
     const parsedUserId = this.toObjectId(userId, 'userId');
@@ -324,7 +348,12 @@ export class SubscriptionService {
       .lean()
       .exec();
     if (work && work.authorId.toString() === userId) {
-      return { hasAccess: true, accessType: 'author', price, isPremiumSubscriber: false };
+      return {
+        hasAccess: true,
+        accessType: 'author',
+        price,
+        isPremiumSubscriber: false,
+      };
     }
 
     const purchased = await this.purchaseModel.exists({
@@ -332,15 +361,30 @@ export class SubscriptionService {
       chapterId: parsedChapterId,
     });
     if (purchased) {
-      return { hasAccess: true, accessType: 'purchase', price, isPremiumSubscriber: false };
+      return {
+        hasAccess: true,
+        accessType: 'purchase',
+        price,
+        isPremiumSubscriber: false,
+      };
     }
 
     const activeSub = await this.getActiveSubscription(userId);
     if (activeSub) {
-      return { hasAccess: true, accessType: 'subscription', price, isPremiumSubscriber: true };
+      return {
+        hasAccess: true,
+        accessType: 'subscription',
+        price,
+        isPremiumSubscriber: true,
+      };
     }
 
-    return { hasAccess: false, accessType: 'none', price, isPremiumSubscriber: false };
+    return {
+      hasAccess: false,
+      accessType: 'none',
+      price,
+      isPremiumSubscriber: false,
+    };
   }
 
   // ─── Chapter Purchase via Chapa ──────────────────────────────────────
@@ -363,7 +407,9 @@ export class SubscriptionService {
 
     const price = chapter.price || 0;
     if (price === 0) {
-      throw new BadRequestException('This chapter is free — no purchase needed');
+      throw new BadRequestException(
+        'This chapter is free — no purchase needed',
+      );
     }
 
     const existing = await this.purchaseModel.exists({
@@ -392,7 +438,9 @@ export class SubscriptionService {
       (process.env.backendHost || 'http://localhost:4000') +
       '/payments/callback';
 
-    const email = (user as any)?.email || `${((user as any)?.username || 'user').replace(/\s+/g, '')}@inklink.app`;
+    const email =
+      (user as any)?.email ||
+      `${((user as any)?.username || 'user').replace(/\s+/g, '')}@inklink.app`;
 
     const chapaRes = await this.chapaService.initializePayment({
       amount: price,
@@ -437,7 +485,9 @@ export class SubscriptionService {
     returnUrl: string,
   ) {
     if (amount <= 0) {
-      throw new BadRequestException('Donation amount must be greater than zero');
+      throw new BadRequestException(
+        'Donation amount must be greater than zero',
+      );
     }
 
     const author = await this.userModel
@@ -458,7 +508,9 @@ export class SubscriptionService {
       (process.env.backendHost || 'http://localhost:4000') +
       '/payments/callback';
 
-    const email = (user as any)?.email || `${((user as any)?.username || 'user').replace(/\s+/g, '')}@inklink.app`;
+    const email =
+      (user as any)?.email ||
+      `${((user as any)?.username || 'user').replace(/\s+/g, '')}@inklink.app`;
 
     const chapaRes = await this.chapaService.initializePayment({
       amount: amount,
@@ -501,15 +553,17 @@ export class SubscriptionService {
     }
 
     const meta = chapaRes.data.meta || {};
-    const { userId, authorId, amount } = meta as any;
+    const { userId, authorId, amount } = meta;
 
     if (!authorId || !amount) {
       throw new BadRequestException('Invalid transaction metadata');
     }
 
     const donationAmount = Number(amount) || chapaRes.data.amount;
-    const authorShare = Math.round((donationAmount * AUTHOR_SHARE_PERCENT) / 100 * 100) / 100;
-    const platformShare = Math.round((donationAmount * PLATFORM_SHARE_PERCENT) / 100 * 100) / 100;
+    const authorShare =
+      Math.round(((donationAmount * AUTHOR_SHARE_PERCENT) / 100) * 100) / 100;
+    const platformShare =
+      Math.round(((donationAmount * PLATFORM_SHARE_PERCENT) / 100) * 100) / 100;
 
     // Credit author wallet
     await this.walletService.addRevenue(
@@ -528,7 +582,6 @@ export class SubscriptionService {
     };
   }
 
-
   /**
    * Verify a Chapa chapter purchase payment and record the purchase.
    */
@@ -542,8 +595,15 @@ export class SubscriptionService {
     }
 
     const meta = chapaRes.data.meta || {};
-    const { userId, chapterId, workId, authorId, price, chapterTitle, workTitle } =
-      meta as any;
+    const {
+      userId,
+      chapterId,
+      workId,
+      authorId,
+      price,
+      chapterTitle,
+      workTitle,
+    } = meta;
 
     if (!userId || !chapterId) {
       throw new BadRequestException('Invalid transaction metadata');
@@ -559,9 +619,14 @@ export class SubscriptionService {
     }
 
     const authorShare =
-      Math.round(((price || chapaRes.data.amount) * AUTHOR_SHARE_PERCENT) / 100 * 100) / 100;
+      Math.round(
+        (((price || chapaRes.data.amount) * AUTHOR_SHARE_PERCENT) / 100) * 100,
+      ) / 100;
     const platformShare =
-      Math.round(((price || chapaRes.data.amount) * PLATFORM_SHARE_PERCENT) / 100 * 100) / 100;
+      Math.round(
+        (((price || chapaRes.data.amount) * PLATFORM_SHARE_PERCENT) / 100) *
+          100,
+      ) / 100;
 
     await this.purchaseModel.create({
       userId: this.toObjectId(userId),
@@ -609,7 +674,11 @@ export class SubscriptionService {
 
   // ─── Read Tracking ───────────────────────────────────────────────────
 
-  async logReadProgress(chapterId: string, userId: string, readPercentage: number) {
+  async logReadProgress(
+    chapterId: string,
+    userId: string,
+    readPercentage: number,
+  ) {
     const parsedChapterId = this.toObjectId(chapterId, 'chapterId');
     const parsedUserId = this.toObjectId(userId, 'userId');
 
