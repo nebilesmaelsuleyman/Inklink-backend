@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+
+cd /app
+
+
+mkdir -p /app/data
+mkdir -p /app/model
+if [ ! -f /app/data/golden.csv ] && [ -f /seed/data/golden.csv ]; then
+ cp /seed/data/golden.csv /app/data/golden.csv
+fi
+
+
+if [ ! -f /app/model/config.json ]; then
+ echo "[moderation-service] model missing; downloading..."
+ python download_model.py
+fi
+
+if [ ! -f /app/data/golden_embeddings.npy ] || [ ! -f /app/data/golden_labels.npy ]; then
+ echo "[moderation-service] embeddings missing; generating..."
+ python preprocess_golden.py
+fi
+
+
+exec uvicorn app:app --host 0.0.0.0 --port 8000
