@@ -1,0 +1,66 @@
+name: ink-link
+
+
+services:
+ backend:
+   build:
+     context: ./backend
+     target: dev
+   environment:
+     NODE_ENV: development
+     HOST: 0.0.0.0
+     PORT: 4000
+     MONGODB_URI: ${MONGODB_URI}
+     DB_NAME: ${DB_NAME:-InkLink}
+     DISABLE_DB: ${DISABLE_DB:-false}
+   ports:
+     - "${BACKEND_PORT:-4000}:4000"
+   depends_on:
+     moderation:
+       condition: service_healthy
+   volumes:
+     - ./backend/src:/app/src
+     - ./backend/test:/app/test
+     - ./backend/nest-cli.json:/app/nest-cli.json:ro
+     - ./backend/tsconfig.json:/app/tsconfig.json:ro
+     - ./backend/tsconfig.build.json:/app/tsconfig.build.json:ro
+     - ./backend/package.json:/app/package.json:ro
+     - ./backend/package-lock.json:/app/package-lock.json:ro
+   healthcheck:
+     test:
+       [
+         "CMD-SHELL",
+         "node -e 
+         \"fetch('http://127.0.0.1:4000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+       ]
+
+
+     interval: 10s
+     timeout: 3s
+     retries: 10
+
+
+ moderation:
+   build:
+     context: ./moderation-service
+   environment:
+     PYTHONUNBUFFERED: "1"
+   ports:
+     - "${MODERATION_PORT:-8000}:8000"
+   volumes:
+     - moderation_model:/app/model
+     - moderation_data:/app/data
+   healthcheck:
+     test:
+       [
+         "CMD-SHELL",
+         "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/test')\"",
+       ]
+     interval: 15s
+     timeout: 5s
+     retries: 20
+
+
+volumes:
+ moderation_model:
+ moderation_data:
