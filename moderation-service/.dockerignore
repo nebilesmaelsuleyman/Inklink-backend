@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.Python
+.env
+.env.*
+.venv/
+venv/
+.DS_Store
+.git
+.github
+
+# Local artifacts (cache/persistence is handled via Docker volumes)
+model/
+data/golden_embeddings.npy
+data/golden_labels.npy
+
