@@ -1,52 +1,60 @@
-# from fastapi import FastAPI
-# from pydantic import BaseModel
-# import numpy as np
-
-# from embedding_utils import get_embedding, similarity
-
-# app = FastAPI()
-# golden_embeddings = np.load("data/golden_embeddings.npy")
-# golden_labels = np.load("data/golden_labels.npy")
-
-# class Post(BaseModel):
-#     text: str
-
-# @app.post("/moderate")
-# def moderate(post: Post):
-#     emb = get_embedding(post.text)
-#     sims = similarity(emb, golden_embeddings)
-#     idx = sims.argmax()
-#     label = golden_labels[idx]
-#     confidence=float(sims[0][idx])
-#     return {"child_safe": bool(label[0]), "adult_safe": bool(label[1])}
-
-
-
-from fastapi import FastAPI
-import numpy as np
-
-from embedding_utils import get_embedding, similarity
-
 from pathlib import Path
+from typing import Any
+
+import numpy as np
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 app = FastAPI()
 
 BASE_DIR = Path(__file__).resolve().parent
-golden_embeddings = np.load(BASE_DIR / "data" / "golden_embeddings.npy")
-golden_labels = np.load(BASE_DIR / "data" / "golden_labels.npy")
+DATA_DIR = BASE_DIR / "data"
+MODEL_DIR = BASE_DIR / "model"
+
+
+class Post(BaseModel):
+    text: str
+
+
+def _artifacts_ready() -> tuple[bool, str]:
+    if not (MODEL_DIR / "config.json").exists():
+        return False, "Model not found at /app/model. Run download_model.py first."
+    if not (DATA_DIR / "golden_embeddings.npy").exists() or not (DATA_DIR / "golden_labels.npy").exists():
+        return False, "Embeddings not found in /app/data. Run preprocess_golden.py first."
+    return True, "ready"
+
+
+def _load_moderation_assets() -> tuple[Any, Any, np.ndarray, np.ndarray]:
+    from embedding_utils import get_embedding, similarity
+
+    golden_embeddings = np.load(DATA_DIR / "golden_embeddings.npy")
+    golden_labels = np.load(DATA_DIR / "golden_labels.npy")
+
+    return get_embedding, similarity, golden_embeddings, golden_labels
 
 
 @app.get("/test")
 def test_mock():
+    return {"status": "ok"}
 
-    mock_text = "በአንድ ወቅት በአንዲት ትንሽ መንደር ውስጥ የሚኖሩ ሰዎች በሰላም አብረው ይኖሩ ነበር። ነገር ግን አንድ ቀን በድንገት በመካከላቸው የጥላቻ ዘር የሚዘራ እንግዳ ሰው መጣ። ይህ ሰው በሰፈሩ ውስጥ የሚገኙ ወጣቶችን በመሰብሰብ እርስ በርስ እንዲጣሉ መርዝ ይረጭባቸው ጀመር። አንዱን ብሔር ከሌላው፣ አንዱን ሃይማኖት ከሌላው ጋር ለማጋጨት የማይነካው ድንጋይ አልነበረም። መንደሩም በጭንቀት ተሞላች፤ የነበረው ፍቅርም ወደ መከፋፈል እና ወደ ዛቻ ተቀየረ"
 
-    emb = get_embedding(mock_text)
+@app.get("/ready")
+def readiness():
+    ready, message = _artifacts_ready()
+    return {"ready": ready, "message": message}
 
+
+@app.post("/moderate")
+def moderate(post: Post):
+    ready, message = _artifacts_ready()
+    if not ready:
+        raise HTTPException(status_code=503, detail=message)
+
+    get_embedding, similarity, golden_embeddings, golden_labels = _load_moderation_assets()
+    emb = get_embedding(post.text)
     sims = similarity(emb, golden_embeddings)
 
     best_idx = int(sims.argmax())
-
     label = golden_labels[best_idx]
     confidence = float(sims[0][best_idx])
 
@@ -69,8 +77,7 @@ def test_mock():
     )
 
     return {
-        "text": mock_text,
         "child_safe": child_safe,
         "adult_safe": adult_safe,
-        "confidence": confidence
+        "confidence": confidence,
     }
