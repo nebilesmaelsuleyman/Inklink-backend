@@ -24,4 +24,27 @@ export class ChatService {
         if (!room) throw new NotFoundException('Chat room not found');
         return room;
     }
+     async getRoomByAuthorId(authorId: string) {
+    const room = await this.ChatModel
+      .findOne({
+        authorId,
+        $or: [{ type: 'author' }, { type: { $exists: false } }],
+      })
+      .lean()
+      .exec();
+
+    // Best-effort migrate legacy docs (no type) to 'author'.
+    if (room && !(room as any).type) {
+      try {
+        await this.ChatModel
+          .updateOne({ _id: room._id }, { $set: { type: 'author' } })
+          .exec();
+      } catch (err: any) {
+        if (err?.code !== 11000) throw err;
+      }
+      (room as any).type = 'author';
+    }
+
+    return room;
+  }
 }
