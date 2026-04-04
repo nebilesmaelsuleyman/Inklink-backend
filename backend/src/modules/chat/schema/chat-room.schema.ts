@@ -1,12 +1,12 @@
-import { Document, Schema, Types } from 'mongoose';
+import { Schema } from 'mongoose';
 
-export interface ChatRoom extends Document<Types.ObjectId> {
+export interface ChatRoomType {
   authorId: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export const ChatRoomSchema = new Schema<ChatRoom>(
+export const ChatRoomSchema = new Schema(
   {
     type: {
       type: String,
