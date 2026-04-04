@@ -9,7 +9,7 @@ import { ChatMessage } from './schema/message.schema';
 @Injectable()
 export class ChatService {
     constructor(
-        @InjectModel('ChatRoom')private readonly ChatModel: Model<ChatRoomType> ,
+        @InjectModel('ChatRoomSchema') private readonly ChatModel: Model<ChatRoomType> ,
         @InjectModel('ChatMembership') private readonly membershipModel: Model<ChatMembership>,
         @InjectModel('ChatMessage') private readonly messageModel: Model<ChatMessage>,){} 
 
@@ -46,5 +46,46 @@ export class ChatService {
     }
 
     return room;
+  }
+   async ensureMembership(
+    chatRoomId: ObjectIdLike,
+    userId: string,
+    role: ChatMemberRole,
+  ) {
+    const id = this.asObjectId(chatRoomId);
+    await this.membershipModel
+      .updateOne(
+        { chatRoomId: id, userId },
+        { $setOnInsert: { chatRoomId: id, userId, role } },
+        { upsert: true },
+      )
+      .exec();
+  }
+
+  async getOrCreateRoomForAuthor(authorId: string) {
+    const existing = await this.ChatModel
+      .findOne({
+        authorId,
+        $or: [{ type: 'author' }, { type: { $exists: false } }],
+      })
+      .lean()
+      .exec();
+    if (existing) {
+      if (!(existing as any).type) {
+        try {
+          await this.ChatModel
+            .updateOne({ _id: existing._id }, { $set: { type: 'author' } })
+            .exec();
+        } catch (err: any) {
+          if (err?.code !== 11000) throw err;
+        }
+        (existing as any).type = 'author';
+      }
+      return existing;
+    }
+
+    const created = await this.ChatModel.create({ type: 'author', authorId }) as ChatRoomType & { toObject: () => any };
+    await this.ensureMembership(created._id, authorId, 'author');
+    return created.toObject();
   }
 }

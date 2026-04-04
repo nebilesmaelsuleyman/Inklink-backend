@@ -1,10 +1,18 @@
-import { Schema } from 'mongoose';
+import { Schema, Types } from 'mongoose';
+
+export type ChatRoomKind = 'author' | 'direct' | 'group';
 
 export interface ChatRoomType {
-  authorId: string;
+  _id: Types.ObjectId;
+  type: ChatRoomKind;      
+  authorId?: string;    
+  directKey?: string;      
+  title?: string;         
+  createdBy?: string;     
   createdAt: Date;
   updatedAt: Date;
 }
+
 
 export const ChatRoomSchema = new Schema(
   {
