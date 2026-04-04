@@ -1,20 +1,28 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { UsersController } from './users.controller';
-import { UsersService } from './users.service';
+import { Document, Schema } from 'mongoose';
 
-describe('UsersController', () => {
-  let controller: UsersController;
+export const USER_MODEL_NAME = 'User';
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [UsersController],
-      providers: [UsersService],
-    }).compile();
+export interface UserDocument extends Document {
+  username: string;
+  password: string;
+  email?: string;
+  role: 'user' | 'admin';
+  createdAt: Date;
+  updatedAt: Date;
+}
 
-    controller = module.get<UsersController>(UsersController);
-  });
-
-  it('should be defined', () => {
-    expect(controller).toBeDefined();
-  });
-});
+export const UserSchema = new Schema<UserDocument>(
+  {
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+    },
+    password: { type: String, required: true },
+    email: { type: String, required: false, trim: true, lowercase: true },
+    role: { type: String, enum: ['user', 'admin'], default: 'user' },
+  },
+  { timestamps: true },
+);

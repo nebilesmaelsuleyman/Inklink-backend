@@ -1,26 +1,81 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { hash } from 'bcryptjs';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { USER_MODEL_NAME, UserDocument } from './user.schema';
 
 @Injectable()
 export class UsersService {
-  create(createUserDto: CreateUserDto) {
-    return 'This action adds a new user';
+  constructor(
+    @Optional()
+    @InjectModel(USER_MODEL_NAME)
+    private readonly userModel?: Model<UserDocument>,
+  ) {}
+
+  async create(createUserDto: CreateUserDto) {
+    if (!this.userModel) {
+      return null;
+    }
+
+    const payload = { ...createUserDto };
+    payload.password = await this.hashPassword(createUserDto.password);
+
+    const user = new this.userModel(payload);
+    return user.save();
   }
 
-  findAll() {
-    return `This action returns all users`;
+  async findAll() {
+    if (!this.userModel) {
+      return [];
+    }
+
+    return this.userModel.find().select('-password').lean();
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  async findOne(id: string) {
+    if (!this.userModel) {
+      return null;
+    }
+
+    return this.userModel.findById(id).select('-password').lean();
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  async findByUsername(username: string) {
+    if (!this.userModel || !username) {
+      return null;
+    }
+
+    return this.userModel.findOne({ username: username.toLowerCase() });
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  async update(id: string, updateUserDto: UpdateUserDto) {
+    if (!this.userModel) {
+      return null;
+    }
+
+    const payload: UpdateUserDto = { ...updateUserDto };
+
+    if (payload.password) {
+      payload.password = await this.hashPassword(payload.password);
+    }
+
+    return this.userModel
+      .findByIdAndUpdate(id, payload, { new: true })
+      .select('-password')
+      .lean();
+  }
+
+  async remove(id: string) {
+    if (!this.userModel) {
+      return null;
+    }
+
+    return this.userModel.findByIdAndDelete(id).lean();
+  }
+
+  private hashPassword(password: string) {
+    return hash(password, 10);
   }
 }
