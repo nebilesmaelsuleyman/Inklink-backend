@@ -9,6 +9,17 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import {
+  ApiBody,
+  ApiCookieAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+  ApiCreatedResponse,
+  ApiConflictResponse,
+  ApiBadRequestResponse,
+} from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -21,12 +32,18 @@ type AuthenticatedRequest = Request & {
   };
 };
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('signup')
   @HttpCode(201)
+  @ApiOperation({ summary: 'Create a new account and set auth cookie' })
+  @ApiBody({ type: CreateUserDto })
+  @ApiCreatedResponse({ description: 'Signup successful' })
+  @ApiBadRequestResponse({ description: 'username and password are required' })
+  @ApiConflictResponse({ description: 'Username already exists' })
   async signup(
     @Body() userDto: CreateUserDto,
     @Res({ passthrough: true }) response: Response,
@@ -54,6 +71,11 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
+  @ApiOperation({ summary: 'Login with username and password and set auth cookie' })
+  @ApiBody({ type: CreateAuthDto })
+  @ApiOkResponse({ description: 'Login successful' })
+  @ApiBadRequestResponse({ description: 'username and password are required' })
+  @ApiUnauthorizedResponse({ description: 'Invalid username or password' })
   async login(
     @Body() credentials: CreateAuthDto,
     @Res({ passthrough: true }) response: Response,
@@ -80,6 +102,10 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get the current authenticated user' })
+  @ApiCookieAuth('auth_token')
+  @ApiOkResponse({ description: 'Current authenticated user' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   getMe(@Req() request: AuthenticatedRequest) {
     return {
       user: request.user,
@@ -88,6 +114,9 @@ export class AuthController {
 
   @Post('logout')
   @HttpCode(200)
+  @ApiOperation({ summary: 'Clear auth cookie and log out' })
+  @ApiCookieAuth('auth_token')
+  @ApiOkResponse({ description: 'Logout successful' })
   logout(@Res({ passthrough: true }) response: Response) {
     response.clearCookie(
       this.authService.getAuthCookieName(),
