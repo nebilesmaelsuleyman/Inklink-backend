@@ -10,6 +10,10 @@ import { MessageProtocol, MessageType } from '../protocol/message.protocol';
 export class RoomService {
   private rooms = new Map<string, IRoom>();
 
+  getRoom(roomName: string): IRoom | undefined {
+    return this.rooms.get(roomName);
+  }
+
   async getOrCreate(roomName: string): Promise<IRoom> {
     let room = this.rooms.get(roomName);
     if (!room) {
