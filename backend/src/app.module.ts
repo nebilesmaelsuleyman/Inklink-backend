@@ -8,12 +8,17 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { CollaborationModule } from './modules/collaboration/collaboration.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { WorksModule } from './modules/works/works.module';
+import { ChaptersModule } from './modules/chapters/chapters.module';
+import { YjsModule } from './modules/yjs/yjs.module';
 import { config as loadEnv } from 'dotenv';
 
 loadEnv({ path: '.env' });
 
 const optionalImports =
-  process.env.DISABLE_DB === 'true' ? [] : [DatabaseModule, ChatModule];
+  process.env.DISABLE_DB === 'true'
+    ? []
+    : [DatabaseModule, ChatModule, WorksModule, ChaptersModule, YjsModule];
 
 @Module({
   imports: [
