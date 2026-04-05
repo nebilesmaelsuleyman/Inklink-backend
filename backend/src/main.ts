@@ -5,6 +5,9 @@ import cookieParser from 'cookie-parser';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { WorksModule } from './modules/works/works.module';
+import { ChaptersModule } from './modules/chapters/chapters.module';
+import { YjsModule } from './modules/yjs/yjs.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -16,18 +19,19 @@ async function bootstrap() {
   });
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('Ink Link Auth API')
-    .setDescription('Authentication endpoints for signup, login, profile, and logout')
+    .setTitle('Ink Link Backend API')
+    .setDescription('Authentication + Editor (Works, Chapters, Yjs collaboration persistence) endpoints')
     .setVersion('1.0')
     .addCookieAuth('auth_token', {
       type: 'apiKey',
       in: 'cookie',
       name: 'auth_token',
     })
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig, {
-    include: [AuthModule],
+    include: [AuthModule, WorksModule, ChaptersModule, YjsModule],
   });
 
   SwaggerModule.setup('api/docs', app, document);
