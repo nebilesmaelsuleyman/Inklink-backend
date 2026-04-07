@@ -24,6 +24,7 @@ import { AuthService } from './auth.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CreateUserDto } from '../users/dto/create-user.dto';
+import { AuthResponseDto } from './dto/auth-response.dto';
 
 type AuthenticatedRequest = Request & {
   user: {
@@ -41,20 +42,17 @@ export class AuthController {
   @HttpCode(201)
   @ApiOperation({ summary: 'Create a new account and set auth cookie' })
   @ApiBody({ type: CreateUserDto })
-  @ApiCreatedResponse({ description: 'Signup successful' })
+  @ApiCreatedResponse({
+    description:
+      'Signup successful. JWT is returned in Set-Cookie (httpOnly) and not in response body.',
+    type: AuthResponseDto,
+  })
   @ApiBadRequestResponse({ description: 'username and password are required' })
   @ApiConflictResponse({ description: 'Username already exists' })
   async signup(
     @Body() userDto: CreateUserDto,
     @Res({ passthrough: true }) response: Response,
   ) {
-    console.log('[AUTH][SIGNUP][CONTROLLER] received body:', {
-      username: userDto?.username,
-      email: userDto?.email,
-      hasPassword: Boolean(userDto?.password),
-      raw: userDto,
-    });
-
     const signupResult = await this.authService.signup(userDto);
 
     response.cookie(
@@ -73,19 +71,17 @@ export class AuthController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Login with username and password and set auth cookie' })
   @ApiBody({ type: CreateAuthDto })
-  @ApiOkResponse({ description: 'Login successful' })
+  @ApiOkResponse({
+    description:
+      'Login successful. JWT is returned in Set-Cookie (httpOnly) and not in response body.',
+    type: AuthResponseDto,
+  })
   @ApiBadRequestResponse({ description: 'username and password are required' })
   @ApiUnauthorizedResponse({ description: 'Invalid username or password' })
   async login(
     @Body() credentials: CreateAuthDto,
     @Res({ passthrough: true }) response: Response,
   ) {
-    console.log('[AUTH][LOGIN][CONTROLLER] received body:', {
-      username: credentials?.username,
-      hasPassword: Boolean(credentials?.password),
-      raw: credentials,
-    });
-
     const loginResult = await this.authService.login(credentials);
 
     response.cookie(

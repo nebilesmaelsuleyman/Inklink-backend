@@ -27,29 +27,16 @@ export class AuthService {
   ) {}
 
   async login(credentials: CreateAuthDto) {
-    console.log('[AUTH][LOGIN][SERVICE] input:', {
-      username: credentials?.username,
-      hasPassword: Boolean(credentials?.password),
-    });
-
     if (!credentials?.username || !credentials?.password) {
       throw new BadRequestException('username and password are required');
     }
 
     const user = await this.validateCredentials(credentials);
-    console.log('[AUTH][LOGIN][SERVICE] validation result:', {
-      foundUser: Boolean(user),
-      username: user?.username,
-      sub: user?.sub,
-    });
-
     if (!user) {
       throw new UnauthorizedException('Invalid username or password');
     }
 
     const accessToken = await this.jwtService.signAsync(user);
-
-    console.log('[AUTH][LOGIN][SERVICE] token issued for user:', user.username);
 
     return {
       accessToken,
@@ -58,18 +45,11 @@ export class AuthService {
   }
 
   async signup(userDto: CreateUserDto) {
-    console.log('[AUTH][SIGNUP][SERVICE] input:', {
-      username: userDto?.username,
-      email: userDto?.email,
-      hasPassword: Boolean(userDto?.password),
-    });
-
     if (!userDto?.username || !userDto?.password) {
       throw new BadRequestException('username and password are required');
     }
 
     const existingUser = await this.usersService.findByUsername(userDto.username);
-    console.log('[AUTH][SIGNUP][SERVICE] existing user found:', Boolean(existingUser));
 
     if (existingUser) {
       throw new ConflictException('Username already exists');
@@ -87,19 +67,12 @@ export class AuthService {
       throw new InternalServerErrorException('Unable to create user');
     }
 
-    console.log('[AUTH][SIGNUP][SERVICE] created user:', {
-      id: String(createdUser._id),
-      username: createdUser.username,
-    });
-
     const user = {
       sub: String(createdUser._id),
       username: createdUser.username,
     };
 
     const accessToken = await this.jwtService.signAsync(user);
-
-    console.log('[AUTH][SIGNUP][SERVICE] token issued for user:', user.username);
 
     return {
       accessToken,
@@ -112,12 +85,28 @@ export class AuthService {
   }
 
   getAuthCookieOptions(): CookieOptions {
+    const configuredSameSite = (
+      this.configService.get<string>('auth.cookieSameSite') || 'lax'
+    )
+      .trim()
+      .toLowerCase();
+
+    const sameSite: CookieOptions['sameSite'] =
+      configuredSameSite === 'strict'
+        ? 'strict'
+        : configuredSameSite === 'none'
+          ? 'none'
+          : 'lax';
+
+    const domain = (this.configService.get<string>('auth.cookieDomain') || '').trim();
+
     return {
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite,
       secure: this.configService.get<boolean>('auth.cookieSecure') || false,
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
+      ...(domain ? { domain } : {}),
     };
   }
 
