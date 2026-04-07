@@ -1,0 +1,226 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Ink Link Backend API - Auth Only",
+    "description": "Authentication + Editor (Works, Chapters, Yjs collaboration persistence) endpoints",
+    "version": "1.0",
+    "contact": {}
+  },
+  "paths": {
+    "/auth/signup": {
+      "post": {
+        "operationId": "AuthController_signup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Signup successful. JWT is returned in Set-Cookie (httpOnly) and not in response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "username and password are required"
+          },
+          "409": {
+            "description": "Username already exists"
+          }
+        },
+        "summary": "Create a new account and set auth cookie",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAuthDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful. JWT is returned in Set-Cookie (httpOnly) and not in response body.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "username and password are required"
+          },
+          "401": {
+            "description": "Invalid username or password"
+          }
+        },
+        "summary": "Login with username and password and set auth cookie",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_getMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current authenticated user"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "auth_token": []
+          }
+        ],
+        "summary": "Get the current authenticated user",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Logout successful"
+          }
+        },
+        "security": [
+          {
+            "auth_token": []
+          }
+        ],
+        "summary": "Clear auth cookie and log out",
+        "tags": [
+          "auth"
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "auth_token"
+      },
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "AuthResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Login successful"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AuthUserDto"
+          }
+        },
+        "required": [
+          "message",
+          "user"
+        ]
+      },
+      "AuthUserDto": {
+        "type": "object",
+        "properties": {
+          "sub": {
+            "type": "string",
+            "example": "67f08df9b9e3adf31f5f4701"
+          },
+          "username": {
+            "type": "string",
+            "example": "check"
+          }
+        },
+        "required": [
+          "sub",
+          "username"
+        ]
+      },
+      "CreateAuthDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "check"
+          },
+          "password": {
+            "type": "string",
+            "example": "12345678"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      },
+      "CreateUserDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "example": "check"
+          },
+          "password": {
+            "type": "string",
+            "example": "12345678"
+          },
+          "email": {
+            "type": "string",
+            "example": "check@gmail.com"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin"
+            ],
+            "example": "user"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      }
+    }
+  },
+  "tags": []
+}
