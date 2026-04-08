@@ -7,13 +7,22 @@ import { InjectModel } from '@nestjs/mongoose';
 import { promises as fs } from 'fs';
 import { Model, Types } from 'mongoose';
 import path from 'path';
-import { CHAPTER_MODEL_NAME, ChapterDocument } from '../chapters/schema/chapter.schema';
+import {
+  CHAPTER_MODEL_NAME,
+  ChapterDocument,
+} from '../chapters/schema/chapter.schema';
 import { PROFILE_MODEL_NAME } from '../profile/profile.model';
 import { Profile } from '../profile/profile.type';
 import { USER_MODEL_NAME, UserDocument } from '../users/user.schema';
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
-import { TransactionDocument, TransactionType } from '../wallet/schema/transaction.schema';
-import { SUBSCRIPTION_MODEL_NAME, SubscriptionDocument } from '../subscription/schema/subscription.schema';
+import {
+  TransactionDocument,
+  TransactionType,
+} from '../wallet/schema/transaction.schema';
+import {
+  SUBSCRIPTION_MODEL_NAME,
+  SubscriptionDocument,
+} from '../subscription/schema/subscription.schema';
 
 type PricingPlan = {
   id: string;
@@ -24,9 +33,27 @@ type PricingPlan = {
 };
 
 const DEFAULT_PRICING: PricingPlan[] = [
-  { id: 'weekly', name: 'Weekly', price: 50, currency: 'ETB', period: 'per week' },
-  { id: 'monthly', name: 'Monthly', price: 150, currency: 'ETB', period: 'per month' },
-  { id: 'yearly', name: 'Yearly', price: 1500, currency: 'ETB', period: 'per year' },
+  {
+    id: 'weekly',
+    name: 'Weekly',
+    price: 50,
+    currency: 'ETB',
+    period: 'per week',
+  },
+  {
+    id: 'monthly',
+    name: 'Monthly',
+    price: 150,
+    currency: 'ETB',
+    period: 'per month',
+  },
+  {
+    id: 'yearly',
+    name: 'Yearly',
+    price: 1500,
+    currency: 'ETB',
+    period: 'per year',
+  },
 ];
 
 @Injectable()
@@ -54,19 +81,19 @@ export class AdminService {
 
   async getRevenue() {
     const now = new Date();
-    
+
     // Today: Start of today
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
-    
+
     // This Week: Start of current week (Sunday)
     const weekStart = new Date(now);
     weekStart.setHours(0, 0, 0, 0);
     weekStart.setDate(now.getDate() - now.getDay());
-    
+
     // This Month: Start of current month
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    
+
     // This Year: Start of current year
     const yearStart = new Date(now.getFullYear(), 0, 1);
 
@@ -81,8 +108,9 @@ export class AdminService {
     const results: any = {};
 
     for (const period of periods) {
-      const query = period.id === 'all' ? {} : { createdAt: { $gte: period.start } };
-      
+      const query =
+        period.id === 'all' ? {} : { createdAt: { $gte: period.start } };
+
       const transactions = await this.transactionModel
         .find(query)
         .populate('userId', 'username email')
@@ -90,11 +118,17 @@ export class AdminService {
         .lean()
         .exec();
 
-      console.log(`[Revenue] Period: ${period.id}, Query: ${JSON.stringify(query)}, Count: ${transactions.length}`);
+      console.log(
+        `[Revenue] Period: ${period.id}, Query: ${JSON.stringify(query)}, Count: ${transactions.length}`,
+      );
 
       const getCut = (t: any) => {
-        if (t.type === TransactionType.SUBSCRIPTION || t.type === 'premium_subscription') return 1.0;
-        if (t.type === TransactionType.PREMIUM) return 0.20;
+        if (
+          t.type === TransactionType.SUBSCRIPTION ||
+          t.type === 'premium_subscription'
+        )
+          return 1.0;
+        if (t.type === TransactionType.PREMIUM) return 0.2;
         if (t.type === TransactionType.AD) return 1.0;
         if (t.type === TransactionType.DONATION) return 0.05;
         return 0.15;
@@ -212,7 +246,8 @@ export class AdminService {
     const profiles = await this.profileModel.find(query).lean().exec();
     const authorIds = profiles
       .map((profile: any) => {
-        if (Types.ObjectId.isValid(profile._id)) return new Types.ObjectId(profile._id);
+        if (Types.ObjectId.isValid(profile._id))
+          return new Types.ObjectId(profile._id);
         return null;
       })
       .filter(Boolean) as Types.ObjectId[];
@@ -235,8 +270,10 @@ export class AdminService {
       username: profile.username,
       bio: profile.bio || '',
       profileImage: profile.profilePicture || '',
-      isMonetized: Boolean((profile as any).isMonetized),
-      followers: Array.isArray(profile.followers) ? profile.followers.length : 0,
+      isMonetized: Boolean(profile.isMonetized),
+      followers: Array.isArray(profile.followers)
+        ? profile.followers.length
+        : 0,
       worksCount: worksCount.get(profile._id.toString()) || 0,
     }));
   }
@@ -247,7 +284,9 @@ export class AdminService {
     }
 
     const updated = await this.profileModel
-      .findByIdAndUpdate(id, { $set: { isMonetized } } as any, { returnDocument: 'after' })
+      .findByIdAndUpdate(id, { $set: { isMonetized } } as any, {
+        returnDocument: 'after',
+      })
       .lean()
       .exec();
 
@@ -263,7 +302,10 @@ export class AdminService {
     const profile = await this.profileModel.findByIdAndDelete(id).lean().exec();
     if (!profile) throw new NotFoundException('Author not found');
 
-    const user = await this.userModel.findOneAndDelete({ username: (profile as any).username }).lean().exec();
+    const user = await this.userModel
+      .findOneAndDelete({ username: (profile as any).username })
+      .lean()
+      .exec();
     if (user?._id) {
       await this.workModel.deleteMany({ authorId: user._id }).exec();
     }
@@ -282,7 +324,8 @@ export class AdminService {
     }
 
     if (status === 'success') chapterQuery.moderationStatus = 'approved';
-    if (status === 'warning') chapterQuery.moderationStatus = 'needs_admin_review';
+    if (status === 'warning')
+      chapterQuery.moderationStatus = 'needs_admin_review';
     if (status === 'fail') chapterQuery.moderationStatus = 'rejected';
 
     const chapters = await this.chapterModel
@@ -299,9 +342,9 @@ export class AdminService {
       .select('title authorId')
       .lean()
       .exec();
-    const authorIds = Array.from(new Set(works.map((work) => work.authorId.toString()))).map(
-      (id) => new Types.ObjectId(id),
-    );
+    const authorIds = Array.from(
+      new Set(works.map((work) => work.authorId.toString())),
+    ).map((id) => new Types.ObjectId(id));
     const users = await this.userModel
       .find({ _id: { $in: authorIds } })
       .select('username')
@@ -309,7 +352,9 @@ export class AdminService {
       .exec();
 
     const workMap = new Map(works.map((work) => [work._id.toString(), work]));
-    const userMap = new Map(users.map((user: any) => [user._id.toString(), user.username]));
+    const userMap = new Map(
+      users.map((user: any) => [user._id.toString(), user.username]),
+    );
 
     return chapters.map((chapter: any) => {
       const work: any = workMap.get(chapter.workId.toString());
@@ -317,7 +362,8 @@ export class AdminService {
         id: chapter._id.toString(),
         title: chapter.title,
         workTitle: work?.title || '',
-        author: userMap.get(work?.authorId?.toString?.() || '') || 'Unknown author',
+        author:
+          userMap.get(work?.authorId?.toString?.() || '') || 'Unknown author',
         publishedAt: chapter.updatedAt,
         status:
           chapter.moderationStatus === 'approved'
@@ -381,8 +427,12 @@ export class AdminService {
       period: String(plan.period || '').trim(),
     }));
 
-    if (normalizedPlans.some((plan) => !plan.id || !plan.name || !plan.period)) {
-      throw new BadRequestException('Each plan must include id, name, and period');
+    if (
+      normalizedPlans.some((plan) => !plan.id || !plan.name || !plan.period)
+    ) {
+      throw new BadRequestException(
+        'Each plan must include id, name, and period',
+      );
     }
 
     await this.ensurePricingFile();

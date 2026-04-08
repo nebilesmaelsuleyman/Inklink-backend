@@ -2,10 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
-import {
-  PROFILE_MODEL_NAME,
-  ProfileSchema,
-} from '../profile/profile.model';
+import { PROFILE_MODEL_NAME, ProfileSchema } from '../profile/profile.model';
 import { USER_MODEL_NAME, UserSchema } from '../users/user.schema';
 import { WORK_MODEL_NAME, WorkSchema } from '../works/schema/work.schema';
 import {
