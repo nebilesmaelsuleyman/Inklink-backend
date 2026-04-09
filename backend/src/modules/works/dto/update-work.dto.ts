@@ -19,17 +19,17 @@ export class UpdateWorkDto {
  tags?: string[];
 
 
- @ApiPropertyOptional({
-   enum: [
-     'draft',
-     'pending_moderation',
-     'needs_admin_review',
-     'approved',
-     'rejected',
-     'published',
-   ],
-   example: 'draft',
- })
+  @ApiPropertyOptional({
+    enum: [
+      'draft',
+      'pending_moderation',
+      'needs_admin_review',
+      'approved',
+      'rejected',
+      'published',
+    ],
+    example: 'draft',
+  })
   status?: WorkStatus;
 }
 

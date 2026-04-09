@@ -128,6 +128,9 @@ private async evaluateAndBuildModerationFields(text: string) {
       title,
       orderIndex,
       contentText: createChapterDto.contentText || '',
+      ...(await this.evaluateAndBuildModerationFields(
+        [title, createChapterDto.contentText || ''].join('\n\n'),
+      )),
     });
 
     return this.mapChapter(created.toObject());
