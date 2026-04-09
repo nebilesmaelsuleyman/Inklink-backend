@@ -7,6 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ChaptersService } from '../chapters/chapters.service';
+import { ModerationService } from '../moderation/moderation.service';
 import { CreateWorkDto } from './dto/create-work.dto';
 import { UpdateWorkDto } from './dto/update-work.dto';
 import { WORK_MODEL_NAME, WorkDocument } from './schema/work.schema';
@@ -17,6 +18,7 @@ export class WorksService {
     @InjectModel(WORK_MODEL_NAME)
     private readonly workModel: Model<WorkDocument>,
     private readonly chaptersService: ChaptersService,
+    private readonly moderationService: ModerationService,
   ) {}
 
   private toObjectId(id: string, field = 'id') {
@@ -35,17 +37,48 @@ export class WorksService {
 
   private mapWork(work: any) {
     return {
-      id: work._id.toString(),
-      authorId: work.authorId.toString(),
-      title: work.title,
-      summary: work.summary,
-      coverImage: work.coverImage,
-      tags: work.tags || [],
-      status: work.status,
-      createdAt: work.createdAt,
-      updatedAt: work.updatedAt,
+       id: work._id.toString(),
+     authorId: work.authorId.toString(),
+     title: work.title,
+     summary: work.summary,
+     coverImage: work.coverImage,
+     tags: work.tags || [],
+     status: work.status,
+     moderationConfidence: work.moderationConfidence,
+     moderationReason: work.moderationReason,
+     childSafe: work.childSafe,
+     adultSafe: work.adultSafe,
+     reviewedBy: work.reviewedBy ? work.reviewedBy.toString() : undefined,
+     reviewedAt: work.reviewedAt,
+     moderationUpdatedAt: work.moderationUpdatedAt,
+     createdAt: work.createdAt,
+     updatedAt: work.updatedAt,
+
     };
   }
+
+   private async evaluateAndBuildModerationFields(text: string) {
+   const result = await this.moderationService.moderateText(text);
+   const status =
+     result.decision === 'approved'
+       ? 'approved'
+       : result.decision === 'rejected'
+         ? 'rejected'
+         : 'needs_admin_review';
+
+
+   return {
+     status,
+     moderationConfidence: result.confidence,
+     moderationReason: result.reason,
+     childSafe: result.childSafe,
+     adultSafe: result.adultSafe,
+     moderationUpdatedAt: new Date(),
+     reviewedBy: undefined,
+     reviewedAt: undefined,
+   };
+ }
+
 
   private async assertWorkOwner(workId: Types.ObjectId, requesterId: string) {
     const ownerId = this.toObjectId(requesterId, 'requesterId');
@@ -55,22 +88,30 @@ export class WorksService {
     }
   }
 
-  async create(requesterId: string, createWorkDto: CreateWorkDto) {
-    const authorId = this.toObjectId(requesterId, 'requesterId');
-    const title = (createWorkDto.title || '').trim();
-    if (!title) throw new BadRequestException('title is required');
+ async create(requesterId: string, createWorkDto: CreateWorkDto) {
+   const authorId = this.toObjectId(requesterId, 'requesterId');
+   const title = (createWorkDto.title || '').trim();
+   if (!title) throw new BadRequestException('title is required');
 
-    const created = await this.workModel.create({
-      authorId,
-      title,
-      summary: (createWorkDto.summary || '').trim(),
-      coverImage: createWorkDto.coverImage,
-      tags: this.normalizeTags(createWorkDto.tags),
-      status: 'draft',
-    });
 
-    return this.mapWork(created.toObject());
-  }
+   const moderationFields = await this.evaluateAndBuildModerationFields(
+     [title, createWorkDto.summary || ''].join('\n\n'),
+   );
+
+
+   const created = await this.workModel.create({
+     authorId,
+     title,
+     summary: (createWorkDto.summary || '').trim(),
+     coverImage: createWorkDto.coverImage,
+     tags: this.normalizeTags(createWorkDto.tags),
+     ...moderationFields,
+   });
+
+
+   return this.mapWork(created.toObject());
+ }
+
 
   async list(requesterId: string, authorId?: string) {
     const requesterObjectId = this.toObjectId(requesterId, 'requesterId');
