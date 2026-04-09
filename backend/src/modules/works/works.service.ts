@@ -281,6 +281,32 @@ async adminApprove(id: string, adminId: string) {
    if (!updated) throw new NotFoundException('Work not found');
   return this.mapWork(updated);
  }
+async adminReject(id: string, adminId: string) {
+   const workId = this.toObjectId(id);
+   const reviewerId = this.toObjectId(adminId, 'adminId');
+
+
+   const updated = await this.workModel
+     .findByIdAndUpdate(
+       workId,
+       {
+         $set: {
+           status: 'rejected',
+           moderationReason: 'rejected_by_admin',
+           reviewedBy: reviewerId,
+           reviewedAt: new Date(),
+           moderationUpdatedAt: new Date(),
+         },
+       },
+       { new: true },
+     )
+     .lean()
+     .exec();
+
+
+   if (!updated) throw new NotFoundException('Work not found');
+   return this.mapWork(updated);
+ }
 
 
 }
