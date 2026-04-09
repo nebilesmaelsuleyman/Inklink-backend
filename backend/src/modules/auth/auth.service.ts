@@ -16,6 +16,7 @@ import { CreateUserDto } from '../users/dto/create-user.dto';
 type AuthenticatedUser = {
   sub: string;
   username: string;
+  role: 'user' | 'admin';
 };
 
 @Injectable()
@@ -55,7 +56,9 @@ export class AuthService {
       throw new ConflictException('Username already exists');
     }
 
-    let createdUser: { _id: unknown; username: string } | null = null;
+    let createdUser:
+      | { _id: unknown; username: string; role?: 'user' | 'admin' }
+      | null = null;
 
     try {
       createdUser = await this.usersService.create(userDto);
@@ -70,6 +73,7 @@ export class AuthService {
     const user = {
       sub: String(createdUser._id),
       username: createdUser.username,
+      role: createdUser.role || 'user',
     };
 
     const accessToken = await this.jwtService.signAsync(user);
@@ -128,6 +132,7 @@ export class AuthService {
     return {
       sub: String(user._id),
       username: user.username,
+      role: user.role || 'user',
     };
   }
 }
