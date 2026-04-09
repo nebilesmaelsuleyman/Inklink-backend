@@ -11,6 +11,7 @@ import { CreateChapterDto } from './dto/create-chapter.dto';
 import { ReorderChaptersDto } from './dto/reorder-chapters.dto';
 import { UpdateChapterDto } from './dto/update-chapter.dto';
 import { CHAPTER_MODEL_NAME, ChapterDocument } from './schema/chapter.schema';
+import { ModerationService } from '../moderation/moderation.service';
 
 @Injectable()
 export class ChaptersService {
@@ -19,6 +20,8 @@ export class ChaptersService {
     private readonly chapterModel: Model<ChapterDocument>,
     @InjectModel(WORK_MODEL_NAME)
     private readonly workModel: Model<WorkDocument>,
+    private readonly moderationService: ModerationService,
+
   ) {}
 
   private toObjectId(id: string, field = 'id') {
@@ -30,15 +33,41 @@ export class ChaptersService {
 
   private mapChapter(chapter: any) {
     return {
-      id: chapter._id.toString(),
-      workId: chapter.workId.toString(),
-      title: chapter.title,
-      orderIndex: chapter.orderIndex,
-      contentText: chapter.contentText,
-      createdAt: chapter.createdAt,
-      updatedAt: chapter.updatedAt,
+     id: chapter._id.toString(),
+     workId: chapter.workId.toString(),
+     title: chapter.title,
+     orderIndex: chapter.orderIndex,
+     contentText: chapter.contentText,
+     moderationStatus: chapter.moderationStatus,
+     moderationConfidence: chapter.moderationConfidence,
+     moderationReason: chapter.moderationReason,
+     childSafe: chapter.childSafe,
+     adultSafe: chapter.adultSafe,
+     moderationUpdatedAt: chapter.moderationUpdatedAt,
+     createdAt: chapter.createdAt,
+     updatedAt: chapter.updatedAt,
+
     };
   }
+
+
+private async evaluateAndBuildModerationFields(text: string) {
+   const result = await this.moderationService.moderateText(text);
+   return {
+     moderationStatus:
+       result.decision === 'approved'
+         ? 'approved'
+         : result.decision === 'rejected'
+           ? 'rejected'
+           : 'needs_admin_review',
+     moderationConfidence: result.confidence,
+     moderationReason: result.reason,
+     childSafe: result.childSafe,
+     adultSafe: result.adultSafe,
+     moderationUpdatedAt: new Date(),
+   };
+ }
+
 
   private async ensureWorkExists(workId: Types.ObjectId) {
     const exists = await this.workModel.exists({ _id: workId });
