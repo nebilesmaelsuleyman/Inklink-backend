@@ -157,6 +157,84 @@
         ]
       }
     },
+    "/works/admin/moderation/review-queue": {
+      "get": {
+        "operationId": "WorksController_reviewQueue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "auth_token": []
+          }
+        ],
+        "summary": "List works awaiting admin moderation review",
+        "tags": [
+          "editor-works"
+        ]
+      }
+    },
+    "/works/admin/{id}/moderation/approve": {
+      "post": {
+        "operationId": "WorksController_approveByAdmin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "auth_token": []
+          }
+        ],
+        "summary": "Approve a work in admin moderation review",
+        "tags": [
+          "editor-works"
+        ]
+      }
+    },
+    "/works/admin/{id}/moderation/reject": {
+      "post": {
+        "operationId": "WorksController_rejectByAdmin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "auth_token": []
+          }
+        ],
+        "summary": "Reject a work in admin moderation review",
+        "tags": [
+          "editor-works"
+        ]
+      }
+    },
     "/works/{workId}/chapters": {
       "post": {
         "operationId": "ChaptersController_create",
@@ -569,6 +647,21 @@
           "auth"
         ]
       }
+    },
+    "/moderation/ready": {
+      "get": {
+        "operationId": "ModerationController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Check moderation service connectivity from backend",
+        "tags": [
+          "moderation"
+        ]
+      }
     }
   },
   "info": {
@@ -656,6 +749,10 @@
             "type": "string",
             "enum": [
               "draft",
+              "pending_moderation",
+              "needs_admin_review",
+              "approved",
+              "rejected",
               "published"
             ],
             "example": "draft"
@@ -762,11 +859,20 @@
           "username": {
             "type": "string",
             "example": "check"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin"
+            ],
+            "example": "user"
           }
         },
         "required": [
           "sub",
-          "username"
+          "username",
+          "role"
         ]
       },
       "AuthResponseDto": {
