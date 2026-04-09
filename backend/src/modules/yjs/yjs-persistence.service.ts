@@ -126,42 +126,68 @@ export class YjsPersistenceService {
     return { doc, lastSeq };
   }
 
-  async appendUpdate(docId: string, requesterId: string, base64Update: string) {
-    const yjsDoc = await this.resolveDocument(docId, requesterId);
-    const documentId = new Types.ObjectId(yjsDoc._id);
-    await this.assertDocumentOwner(documentId, requesterId);
-    const updateBytes = this.decodeBase64(base64Update, 'update');
+async appendUpdate(docId: string, requesterId: string, base64Update: string) {
+   const yjsDoc = await this.resolveDocument(docId, requesterId);
+   const documentId = new Types.ObjectId(yjsDoc._id);
+   await this.assertDocumentOwner(documentId, requesterId);
+   const updateBytes = this.decodeBase64(base64Update, 'update');
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const latest = await this.yjsUpdateModel
-        .findOne({ documentId })
-        .sort({ seq: -1 })
-        .lean()
-        .exec();
-      const nextSeq = latest ? latest.seq + 1 : 1;
 
-      try {
-        const created = await this.yjsUpdateModel.create({
-          documentId,
-          seq: nextSeq,
-          update: Buffer.from(updateBytes),
-        });
+   await this.workModel
+     .updateOne(
+       {
+         _id: yjsDoc.workId,
+         status: { $in: ['published', 'approved'] },
+       } as any,
+       {
+         $set: {
+           status: 'needs_admin_review',
+           moderationReason: 'yjs_update_requires_review',
+           moderationUpdatedAt: new Date(),
+         },
+         $unset: {
+           reviewedBy: '',
+           reviewedAt: '',
+         },
+       },
+     )
+     .exec();
 
-        return {
-          ok: true,
-          documentId: documentId.toString(),
-          seq: created.seq,
-          createdAt: created.createdAt,
-        };
-      } catch (error: any) {
-        if (error?.code !== 11000 || attempt === 2) {
-          throw error;
-        }
-      }
-    }
 
-    throw new BadRequestException('Could not append update');
-  }
+   for (let attempt = 0; attempt < 3; attempt += 1) {
+     const latest = await this.yjsUpdateModel
+       .findOne({ documentId })
+       .sort({ seq: -1 })
+       .lean()
+       .exec();
+     const nextSeq = latest ? latest.seq + 1 : 1;
+
+
+     try {
+       const created = await this.yjsUpdateModel.create({
+         documentId,
+         seq: nextSeq,
+         update: Buffer.from(updateBytes),
+       });
+
+
+       return {
+         ok: true,
+         documentId: documentId.toString(),
+         seq: created.seq,
+         createdAt: created.createdAt,
+       };
+     } catch (error: any) {
+       if (error?.code !== 11000 || attempt === 2) {
+         throw error;
+       }
+     }
+   }
+
+
+   throw new BadRequestException('Could not append update');
+ }
+
 
   async getState(docId: string, requesterId: string) {
     const yjsDoc = await this.resolveDocument(docId, requesterId);

@@ -167,11 +167,20 @@
           "username": {
             "type": "string",
             "example": "check"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "admin"
+            ],
+            "example": "user"
           }
         },
         "required": [
           "sub",
-          "username"
+          "username",
+          "role"
         ]
       },
       "CreateAuthDto": {
