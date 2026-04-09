@@ -1,12 +1,13 @@
-import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { WsAdapter } from '@nestjs/platform-ws';
-import cookieParser from 'cookie-parser';
+import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { AppModule } from './app.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { WorksModule } from './modules/works/works.module';
 import { ChaptersModule } from './modules/chapters/chapters.module';
+import { ModerationModule } from './modules/moderation/moderation.module';
+import { WorksModule } from './modules/works/works.module';
 import { YjsModule } from './modules/yjs/yjs.module';
 
 async function bootstrap() {
@@ -14,7 +15,7 @@ async function bootstrap() {
   app.useWebSocketAdapter(new WsAdapter(app));
   app.use(cookieParser());
   app.enableCors({
-    origin:'http://localhost:3000',
+    origin: 'http://localhost:3000',
     credentials: true,
   });
 
@@ -31,7 +32,7 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig, {
-    include: [AuthModule, WorksModule, ChaptersModule, YjsModule],
+    include: [AuthModule, WorksModule, ChaptersModule, YjsModule, ModerationModule],
   });
 
   SwaggerModule.setup('api/docs', app, document);

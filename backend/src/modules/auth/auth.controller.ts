@@ -30,6 +30,7 @@ type AuthenticatedRequest = Request & {
   user: {
     sub: string;
     username: string;
+    role: 'user' | 'admin';
   };
 };
 
