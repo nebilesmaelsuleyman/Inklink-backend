@@ -38,4 +38,5 @@ export default () => ({
   chat: {
     internalKey: (process.env.CHAT_INTERNAL_KEY || '').trim(),
   },
+  
 });

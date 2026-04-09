@@ -6,6 +6,9 @@ class AuthUserDto {
 
   @ApiProperty({ example: 'check' })
   username: string;
+
+  @ApiProperty({ enum: ['user', 'admin'], example: 'user' })
+  role: 'user' | 'admin';
 }
 
 export class AuthResponseDto {
