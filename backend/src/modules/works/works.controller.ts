@@ -23,6 +23,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateWorkDto } from './dto/create-work.dto';
 import { UpdateWorkDto } from './dto/update-work.dto';
 import { WorksService } from './works.service';
+import { AdminRoleGuard } from 'src/common/guards/admin-role.guard';
 
 type AuthenticatedRequest = Request & {
   user: {
@@ -85,4 +86,27 @@ export class WorksController {
   publish(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.worksService.publish(id, request.user.sub);
   }
+
+
+ @Get('admin/moderation/review-queue')
+ @UseGuards(AdminRoleGuard)
+ @ApiOperation({ summary: 'List works awaiting admin moderation review' })
+ reviewQueue() {
+   return this.worksService.listReviewQueue();
+ }
+
+
+ @Post('admin/:id/moderation/approve')
+ @UseGuards(AdminRoleGuard)
+ @ApiOperation({ summary: 'Approve a work in admin moderation review' })
+ approveByAdmin(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+   return this.worksService.adminApprove(id, request.user.sub);
+ }
+ @Post('admin/:id/moderation/reject')
+ @UseGuards(AdminRoleGuard)
+ @ApiOperation({ summary: 'Reject a work in admin moderation review' })
+ rejectByAdmin(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+   return this.worksService.adminReject(id, request.user.sub);
+ }
+
 }
