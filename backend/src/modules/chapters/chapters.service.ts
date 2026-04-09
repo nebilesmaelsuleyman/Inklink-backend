@@ -134,29 +134,54 @@ private async evaluateAndBuildModerationFields(text: string) {
   }
 
   async update(id: string, requesterId: string, updateChapterDto: UpdateChapterDto) {
-    const chapterId = this.toObjectId(id);
-    await this.assertChapterOwner(chapterId, requesterId);
+   const chapterId = this.toObjectId(id);
+   await this.assertChapterOwner(chapterId, requesterId);
 
-    const updatePayload: any = {};
 
-    if (typeof updateChapterDto.title === 'string') {
-      const title = updateChapterDto.title.trim();
-      if (!title) throw new BadRequestException('title cannot be empty');
-      updatePayload.title = title;
-    }
+   const updatePayload: any = {};
 
-    if (typeof updateChapterDto.contentText === 'string') {
-      updatePayload.contentText = updateChapterDto.contentText;
-    }
 
-    const updated = await this.chapterModel
-      .findByIdAndUpdate(chapterId, { $set: updatePayload }, { new: true })
-      .lean()
-      .exec();
+   if (typeof updateChapterDto.title === 'string') {
+     const title = updateChapterDto.title.trim();
+     if (!title) throw new BadRequestException('title cannot be empty');
+     updatePayload.title = title;
+   }
 
-    if (!updated) throw new NotFoundException('Chapter not found');
-    return this.mapChapter(updated);
-  }
+
+   if (typeof updateChapterDto.contentText === 'string') {
+     updatePayload.contentText = updateChapterDto.contentText;
+   }
+
+
+   if (typeof updateChapterDto.title === 'string' || typeof updateChapterDto.contentText === 'string') {
+     const current = await this.chapterModel.findById(chapterId).lean().exec();
+     if (!current) throw new NotFoundException('Chapter not found');
+
+
+     const nextTitle =
+       typeof updatePayload.title === 'string' ? updatePayload.title : current.title;
+     const nextContent =
+       typeof updatePayload.contentText === 'string'
+         ? updatePayload.contentText
+         : current.contentText || '';
+
+
+     Object.assign(
+       updatePayload,
+       await this.evaluateAndBuildModerationFields([nextTitle, nextContent].join('\n\n')),
+     );
+   }
+
+
+   const updated = await this.chapterModel
+     .findByIdAndUpdate(chapterId, { $set: updatePayload }, { new: true })
+     .lean()
+     .exec();
+
+
+   if (!updated) throw new NotFoundException('Chapter not found');
+   return this.mapChapter(updated);
+ }
 
   async remove(id: string, requesterId: string) {
     const chapterId = this.toObjectId(id);
@@ -168,61 +193,71 @@ private async evaluateAndBuildModerationFields(text: string) {
   }
 
   async reorder(workId: string, requesterId: string, reorderDto: ReorderChaptersDto) {
-    const parsedWorkId = this.toObjectId(workId, 'workId');
-    await this.ensureWorkExists(parsedWorkId);
-    await this.assertWorkOwner(parsedWorkId, requesterId);
+   const parsedWorkId = this.toObjectId(workId, 'workId');
+   await this.ensureWorkExists(parsedWorkId);
+   await this.assertWorkOwner(parsedWorkId, requesterId);
 
-    const byChapterIds = Array.isArray(reorderDto.chapterIds)
-      ? reorderDto.chapterIds
-      : [];
-    const byOrders = Array.isArray(reorderDto.orders) ? reorderDto.orders : [];
 
-    let orders: Array<{ id: string; orderIndex: number }> = [];
+   const byChapterIds = Array.isArray(reorderDto.chapterIds)
+     ? reorderDto.chapterIds
+     : [];
+   const byOrders = Array.isArray(reorderDto.orders) ? reorderDto.orders : [];
 
-    if (byChapterIds.length > 0) {
-      orders = byChapterIds.map((id, index) => ({ id, orderIndex: index }));
-    } else if (byOrders.length > 0) {
-      orders = byOrders;
-    } else {
-      throw new BadRequestException('Provide chapterIds or orders');
-    }
 
-    const chapterObjectIds = orders.map(({ id }) => this.toObjectId(id, 'chapterId'));
+   let orders: Array<{ id: string; orderIndex: number }> = [];
 
-    const existing = await this.chapterModel
-      .find({ _id: { $in: chapterObjectIds }, workId: parsedWorkId })
-      .lean()
-      .exec();
-    if (existing.length !== orders.length) {
-      throw new BadRequestException('Some chapters do not belong to this work');
-    }
 
-    const tempBase = 1_000_000;
+   if (byChapterIds.length > 0) {
+     orders = byChapterIds.map((id, index) => ({ id, orderIndex: index }));
+   } else if (byOrders.length > 0) {
+     orders = byOrders;
+   } else {
+     throw new BadRequestException('Provide chapterIds or orders');
+   }
 
-    await this.chapterModel.bulkWrite(
-      orders.map((item, index) => ({
-        updateOne: {
-          filter: {
-            _id: this.toObjectId(item.id, 'chapterId'),
-            workId: parsedWorkId,
-          },
-          update: { $set: { orderIndex: tempBase + index } },
-        },
-      })),
-    );
 
-    await this.chapterModel.bulkWrite(
-      orders.map((item) => ({
-        updateOne: {
-          filter: {
-            _id: this.toObjectId(item.id, 'chapterId'),
-            workId: parsedWorkId,
-          },
-          update: { $set: { orderIndex: item.orderIndex } },
-        },
-      })),
-    );
+   const chapterObjectIds = orders.map(({ id }) => this.toObjectId(id, 'chapterId'));
 
-    return this.listByWork(workId, requesterId);
-  }
+
+   const existing = await this.chapterModel
+     .find({ _id: { $in: chapterObjectIds }, workId: parsedWorkId })
+     .lean()
+     .exec();
+   if (existing.length !== orders.length) {
+     throw new BadRequestException('Some chapters do not belong to this work');
+   }
+
+
+   const tempBase = 1_000_000;
+
+
+   await this.chapterModel.bulkWrite(
+     orders.map((item, index) => ({
+       updateOne: {
+         filter: {
+           _id: this.toObjectId(item.id, 'chapterId'),
+           workId: parsedWorkId,
+         },
+         update: { $set: { orderIndex: tempBase + index } },
+       },
+     })),
+   );
+
+
+   await this.chapterModel.bulkWrite(
+     orders.map((item) => ({
+       updateOne: {
+         filter: {
+           _id: this.toObjectId(item.id, 'chapterId'),
+           workId: parsedWorkId,
+         },
+         update: { $set: { orderIndex: item.orderIndex } },
+       },
+     })),
+   );
+
+
+   return this.listByWork(workId, requesterId);
+ }
+
 }
