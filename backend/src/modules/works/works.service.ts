@@ -150,51 +150,137 @@ export class WorksService {
   }
 
   async update(id: string, requesterId: string, updateWorkDto: UpdateWorkDto) {
-    const workId = this.toObjectId(id);
-    await this.assertWorkOwner(workId, requesterId);
+   const workId = this.toObjectId(id);
+   await this.assertWorkOwner(workId, requesterId);
 
-    const updatePayload: any = {};
 
-    if (typeof updateWorkDto.title === 'string') {
-      const title = updateWorkDto.title.trim();
-      if (!title) throw new BadRequestException('title cannot be empty');
-      updatePayload.title = title;
-    }
-    if (typeof updateWorkDto.summary === 'string') {
-      updatePayload.summary = updateWorkDto.summary.trim();
-    }
-    if (typeof updateWorkDto.coverImage === 'string') {
-      updatePayload.coverImage = updateWorkDto.coverImage;
-    }
-    if (Array.isArray(updateWorkDto.tags)) {
-      updatePayload.tags = this.normalizeTags(updateWorkDto.tags);
-    }
-    if (updateWorkDto.status === 'draft' || updateWorkDto.status === 'published') {
-      updatePayload.status = updateWorkDto.status;
-    }
+   const updatePayload: any = {};
 
-    const updated = await this.workModel
-      .findByIdAndUpdate(workId, { $set: updatePayload }, { new: true })
-      .lean()
-      .exec();
-    if (!updated) throw new NotFoundException('Work not found');
 
-    return this.mapWork(updated);
-  }
+   if (typeof updateWorkDto.title === 'string') {
+     const title = updateWorkDto.title.trim();
+     if (!title) throw new BadRequestException('title cannot be empty');
+     updatePayload.title = title;
+   }
+   if (typeof updateWorkDto.summary === 'string') {
+     updatePayload.summary = updateWorkDto.summary.trim();
+   }
+   if (typeof updateWorkDto.coverImage === 'string') {
+     updatePayload.coverImage = updateWorkDto.coverImage;
+   }
+   if (Array.isArray(updateWorkDto.tags)) {
+     updatePayload.tags = this.normalizeTags(updateWorkDto.tags);
+   }
+   if (
+     updateWorkDto.status === 'draft' ||
+     updateWorkDto.status === 'pending_moderation'
+   ) {
+     updatePayload.status = updateWorkDto.status;
+   }
 
-  async publish(id: string, requesterId: string) {
-    const workId = this.toObjectId(id);
-    await this.assertWorkOwner(workId, requesterId);
-    const updated = await this.workModel
-      .findByIdAndUpdate(
-        workId,
-        { $set: { status: 'published' } },
-        { new: true },
-      )
-      .lean()
-      .exec();
 
-    if (!updated) throw new NotFoundException('Work not found');
-    return this.mapWork(updated);
-  }
+   if (
+     typeof updatePayload.title === 'string' ||
+     typeof updatePayload.summary === 'string'
+   ) {
+     const current = await this.workModel.findById(workId).lean().exec();
+     if (!current) throw new NotFoundException('Work not found');
+
+
+     const nextTitle =
+       typeof updatePayload.title === 'string' ? updatePayload.title : current.title;
+     const nextSummary =
+       typeof updatePayload.summary === 'string'
+         ? updatePayload.summary
+         : (current.summary || '');
+
+
+     const moderationFields = await this.evaluateAndBuildModerationFields(
+       [nextTitle, nextSummary].join('\n\n'),
+     );
+     Object.assign(updatePayload, moderationFields);
+   }
+
+
+   const updated = await this.workModel
+     .findByIdAndUpdate(workId, { $set: updatePayload }, { new: true })
+     .lean()
+     .exec();
+   if (!updated) throw new NotFoundException('Work not found');
+
+
+   return this.mapWork(updated);
+ }
+
+
+ 
+
+ async publish(id: string, requesterId: string) {
+   const workId = this.toObjectId(id);
+   await this.assertWorkOwner(workId, requesterId);
+
+
+   const existing = await this.workModel.findById(workId).lean().exec();
+   if (!existing) throw new NotFoundException('Work not found');
+   if (existing.status !== 'approved') {
+     throw new BadRequestException(
+       'Work can be published only after moderation approval',
+     );
+   }
+
+
+   const updated = await this.workModel
+.findByIdAndUpdate(
+       workId,
+       { $set: { status: 'published' } },
+       { new: true },
+     )
+     .lean()
+     .exec();
+
+
+   if (!updated) throw new NotFoundException('Work not found');
+   return this.mapWork(updated);
+ }
+
+
+ async listReviewQueue() {
+   const queue = await this.workModel
+     .find({ status: 'needs_admin_review' })
+     .sort({ moderationUpdatedAt: -1, updatedAt: -1 })
+     .lean()
+     .exec();
+
+
+   return queue.map((work) => this.mapWork(work));
+ }
+
+async adminApprove(id: string, adminId: string) {
+   const workId = this.toObjectId(id);
+   const reviewerId = this.toObjectId(adminId, 'adminId');
+
+
+   const updated = await this.workModel
+     .findByIdAndUpdate(
+       workId,
+       {
+         $set: {
+           status: 'approved',
+           moderationReason: 'approved_by_admin',
+           reviewedBy: reviewerId,
+           reviewedAt: new Date(),
+           moderationUpdatedAt: new Date(),
+         },
+       },
+       { new: true },
+     )
+     .lean()
+     .exec();
+
+
+   if (!updated) throw new NotFoundException('Work not found');
+  return this.mapWork(updated);
+ }
+
+
 }
