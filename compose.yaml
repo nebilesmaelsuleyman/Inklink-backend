@@ -10,6 +10,7 @@ services:
      NODE_ENV: development
      HOST: 0.0.0.0
      PORT: 4000
+     MODERATION_BASE_URL: http://moderation:8000
      MONGODB_URI: mongodb+srv://InkLink:e51HcvHtQluM81YY@cluster0.ramuxrb.mongodb.net/InkLink?appName=Cluster0
      DB_NAME: ${DB_NAME:-InkLink}
      DISABLE_DB: ${DISABLE_DB:-false}
@@ -45,17 +46,16 @@ services:
    ports:
      - "${MODERATION_PORT:-8000}:8000"
    volumes:
-     - moderation_model:/app/model
-     - moderation_data:/app/data
+     - ./moderation-service:/app
    healthcheck:
      test:
        [
          "CMD-SHELL",
-         "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/test')\"",
+         "python -c \"import json, urllib.request; data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/ready')); raise SystemExit(0 if data.get('ready') else 1)\"",
        ]
      interval: 15s
      timeout: 5s
-     retries: 20
+     retries: 60
 
 
 volumes:
