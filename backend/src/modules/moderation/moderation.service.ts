@@ -34,6 +34,30 @@ export class ModerationService {
    );
  }
 
+ async ready(): Promise<{ ok: boolean; message: string }> {
+  const response = await fetch(`${this.baseUrl}/ready`, {
+    method: 'GET',
+    signal: AbortSignal.timeout(Math.min(this.timeoutMs, 3000)),
+  }).catch(() => null);
+
+
+  if (!response || !response.ok) {
+    return { ok: false, message: 'moderation_service_unavailable' };
+  }
+
+
+  const payload = (await response.json().catch(() => null)) as
+    | { ready?: boolean; message?: string }
+    | null;
+  if (payload && payload.ready === false) {
+    return { ok: false, message: payload.message || 'not_ready' };
+  }
+
+
+  return { ok: true, message: payload?.message || 'ready' };
+}
+
+
  async moderateText(text: string): Promise<ModerationResult> {
    const bodyText = (text || '').trim();
    if (!bodyText) {
