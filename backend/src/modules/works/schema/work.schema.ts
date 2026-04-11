@@ -12,6 +12,23 @@ export type WorkStatus =
  | 'rejected'
  | 'published';
 
+export type WorkChapterModerationStatus =
+| 'draft'
+| 'pending_moderation'
+| 'needs_admin_review'
+| 'approved'
+| 'rejected';
+
+
+export interface WorkChapterMeta {
+chapterId: Types.ObjectId;
+title: string;
+summary: string;
+coverImage?: string;
+orderIndex: number;
+moderationStatus: WorkChapterModerationStatus;
+moderationUpdatedAt?: Date;
+}
 
 export interface WorkDocument extends Document {
  authorId: Types.ObjectId;
