@@ -7,6 +7,7 @@ import {
   Post,
   Query,
   Req,
+  Delete,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -108,4 +109,13 @@ export class WorksController {
   rejectByAdmin(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.worksService.adminReject(id, request.user.sub);
   }
+  
+ @Delete(':id')
+ @ApiOperation({ summary: 'Delete work' })
+ @ApiParam({ name: 'id', description: 'Work id' })
+ @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+ delete(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+   return this.worksService.delete(id, request.user.sub);
+ }
+
 }

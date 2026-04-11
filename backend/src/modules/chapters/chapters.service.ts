@@ -262,5 +262,11 @@ private async evaluateAndBuildModerationFields(text: string) {
 
    return this.listByWork(workId, requesterId);
  }
+async deleteByWork(workId: string, requesterId: string) {
+  const parsedWorkId = this.toObjectId(workId, 'workId');
+  await this.assertWorkOwner(parsedWorkId, requesterId);
 
+  const result = await this.chapterModel.deleteMany({ workId: parsedWorkId }).exec();
+  return { deletedCount: result.deletedCount };
+}
 }

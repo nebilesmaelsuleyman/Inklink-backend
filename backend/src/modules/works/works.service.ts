@@ -309,4 +309,23 @@ async adminReject(id: string, adminId: string) {
  }
 
 
+
+ async delete(id: string, requesterId: string) {
+   const workId = this.toObjectId(id);
+   await this.assertWorkOwner(workId, requesterId);
+
+
+   // 1. Delete all chapters associated with this work
+   await this.chaptersService.deleteByWork(id, requesterId);
+
+
+   // 2. Delete the work itself
+   const deleted = await this.workModel.findByIdAndDelete(workId).lean().exec();
+   if (!deleted) throw new NotFoundException('Work not found');
+
+
+   return { success: true, message: 'Work and its chapters deleted successfully' };
+ }
+
+
 }
