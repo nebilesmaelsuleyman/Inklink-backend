@@ -16,7 +16,8 @@ import { CreateUserDto } from '../users/dto/create-user.dto';
 type AuthenticatedUser = {
   sub: string;
   username: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'parent' | 'child';
+  parentId?: string;
 };
 
 @Injectable()
@@ -57,7 +58,7 @@ export class AuthService {
     }
 
     let createdUser:
-      | { _id: unknown; username: string; role?: 'user' | 'admin' }
+      | { _id: unknown; username: string; role?: 'user' | 'admin' | 'parent' | 'child' }
       | null = null;
 
     try {
@@ -73,7 +74,8 @@ export class AuthService {
     const user = {
       sub: String(createdUser._id),
       username: createdUser.username,
-      role: createdUser.role || 'user',
+      role: createdUser.role as any || 'user',
+      parentId: (createdUser as any).parentId ? String((createdUser as any).parentId) : undefined,
     };
 
     const accessToken = await this.jwtService.signAsync(user);
@@ -132,7 +134,8 @@ export class AuthService {
     return {
       sub: String(user._id),
       username: user.username,
-      role: user.role || 'user',
+      role: user.role as any || 'user',
+      parentId: (user as any).parentId ? String((user as any).parentId) : undefined,
     };
   }
 }
