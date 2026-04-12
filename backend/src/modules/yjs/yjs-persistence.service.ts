@@ -8,6 +8,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as Y from 'yjs';
 import { CHAPTER_MODEL_NAME, ChapterDocument } from '../chapters/schema/chapter.schema';
+import { WorkAggregationService } from '../work-aggregation/work-aggregation.service';
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
 import {
   YJS_DOCUMENT_MODEL_NAME,
@@ -32,6 +33,7 @@ export class YjsPersistenceService {
     private readonly chapterModel: Model<ChapterDocument>,
     @InjectModel(WORK_MODEL_NAME)
     private readonly workModel: Model<WorkDocument>,
+    private readonly workAggregationService: WorkAggregationService,
   ) {}
 
   private toObjectId(id: string, field = 'id') {
@@ -133,25 +135,33 @@ async appendUpdate(docId: string, requesterId: string, base64Update: string) {
    const updateBytes = this.decodeBase64(base64Update, 'update');
 
 
-   await this.workModel
+   const moderationUpdateResult = await this.chapterModel
      .updateOne(
        {
-         _id: yjsDoc.workId,
-         status: { $in: ['published', 'approved'] },
+         _id: yjsDoc.chapterId,
+         moderationStatus: 'approved',
        } as any,
        {
          $set: {
-           status: 'needs_admin_review',
+           moderationStatus: 'needs_admin_review',
            moderationReason: 'yjs_update_requires_review',
            moderationUpdatedAt: new Date(),
          },
          $unset: {
-           reviewedBy: '',
-           reviewedAt: '',
+           moderationConfidence: '',
+           childSafe: '',
+           adultSafe: '',
          },
        },
      )
      .exec();
+
+   if ((moderationUpdateResult as any)?.modifiedCount > 0) {
+     await this.workAggregationService.recomputeAndPersist(
+       new Types.ObjectId(yjsDoc.workId),
+       { clearReviewed: true },
+     );
+   }
 
 
    for (let attempt = 0; attempt < 3; attempt += 1) {

@@ -12,6 +12,8 @@ export type ChapterModerationStatus =
 export interface ChapterDocument extends Document {
   workId: Types.ObjectId;
   title: string;
+  summary: string;
+ coverImage?: string;
   orderIndex: number;
   contentText: string;
   moderationStatus: ChapterModerationStatus;
@@ -27,7 +29,11 @@ export interface ChapterDocument extends Document {
 export const ChapterSchema = new Schema<ChapterDocument>(
   {
     workId: { type: Schema.Types.ObjectId, ref: 'Work', required: true, index: true },
+
     title: { type: String, required: true, trim: true },
+    summary: { type: String, default: '', trim: true },
+   coverImage: { type: String, required: false },
+
     orderIndex: { type: Number, required: true, default: 0 },
     contentText: { type: String, default: '' },
     moderationStatus: {
