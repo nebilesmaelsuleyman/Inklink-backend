@@ -75,6 +75,20 @@ export class UsersService {
     return this.userModel.findByIdAndDelete(id).lean();
   }
 
+  async findChildren(parentId: string) {
+    if (!this.userModel) {
+      return [];
+    }
+    return this.userModel.find({ parentId }).select('-password').lean();
+  }
+
+  async removeChild(parentId: string, childId: string) {
+    if (!this.userModel) {
+      return null;
+    }
+    return this.userModel.findOneAndDelete({ _id: childId, parentId }).lean();
+  }
+
   private hashPassword(password: string) {
     return hash(password, 10);
   }
