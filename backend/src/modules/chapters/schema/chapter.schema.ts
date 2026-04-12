@@ -13,7 +13,7 @@ export interface ChapterDocument extends Document {
   workId: Types.ObjectId;
   title: string;
   summary: string;
- coverImage?: string;
+  coverImage?: string;
   orderIndex: number;
   contentText: string;
   moderationStatus: ChapterModerationStatus;
@@ -28,17 +28,28 @@ export interface ChapterDocument extends Document {
 
 export const ChapterSchema = new Schema<ChapterDocument>(
   {
-    workId: { type: Schema.Types.ObjectId, ref: 'Work', required: true, index: true },
+    workId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Work',
+      required: true,
+      index: true,
+    },
 
     title: { type: String, required: true, trim: true },
     summary: { type: String, default: '', trim: true },
-   coverImage: { type: String, required: false },
+    coverImage: { type: String, required: false },
 
     orderIndex: { type: Number, required: true, default: 0 },
     contentText: { type: String, default: '' },
     moderationStatus: {
       type: String,
-      enum: ['draft', 'pending_moderation', 'needs_admin_review', 'approved', 'rejected'],
+      enum: [
+        'draft',
+        'pending_moderation',
+        'needs_admin_review',
+        'approved',
+        'rejected',
+      ],
       default: 'draft',
     },
     moderationConfidence: { type: Number, required: false },
