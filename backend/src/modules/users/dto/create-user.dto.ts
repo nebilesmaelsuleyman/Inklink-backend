@@ -10,6 +10,9 @@ export class CreateUserDto {
 	@ApiPropertyOptional({ example: 'check@gmail.com' })
 	email?: string;
 
-	@ApiPropertyOptional({ enum: ['user', 'admin'], example: 'user' })
-	role?: 'user' | 'admin';
+	@ApiPropertyOptional({ enum: ['user', 'admin', 'parent', 'child'], example: 'user' })
+	role?: 'user' | 'admin' | 'parent' | 'child';
+
+	@ApiPropertyOptional()
+	parentId?: string;
 }
