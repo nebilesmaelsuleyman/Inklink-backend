@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { CHAPTER_MODEL_NAME, ChapterSchema } from '../chapters/schema/chapter.schema';
+import { WorkAggregationModule } from '../work-aggregation/work-aggregation.module';
 import { WORK_MODEL_NAME, WorkSchema } from '../works/schema/work.schema';
 import {
   YJS_DOCUMENT_MODEL_NAME,
@@ -16,6 +17,7 @@ import { YjsPersistenceService } from './yjs-persistence.service';
 
 @Module({
   imports: [
+    WorkAggregationModule,
     MongooseModule.forFeature([
       { name: YJS_DOCUMENT_MODEL_NAME, schema: YjsDocumentSchema },
       { name: YJS_UPDATE_MODEL_NAME, schema: YjsUpdateSchema },

@@ -1,0 +1,98 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Ink Link Frontend Moderation API",
+    "version": "1.0.0",
+    "description": "Frontend chapter-content moderation pipeline endpoint only"
+  },
+  "paths": {
+    "/moderation/analyze-text": {
+      "post": {
+        "tags": [
+          "moderation"
+        ],
+        "summary": "Analyze chapter content text for moderation verdict",
+        "operationId": "ModerationController_analyzeText",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerateTextDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moderation analyzed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerateTextResponseDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Moderation service unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ModerateTextDto": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "example": "This is chapter 3 content that the user typed in the editor.",
+            "description": "Raw chapter content text from frontend editor to be analyzed by moderation service"
+          }
+        }
+      },
+      "ModerateTextResponseDto": {
+        "type": "object",
+        "required": [
+          "verdict",
+          "confidence",
+          "childSafe",
+          "adultSafe",
+          "reason"
+        ],
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "safe",
+              "unsafe",
+              "needs_admin_review"
+            ],
+            "example": "safe"
+          },
+          "confidence": {
+            "type": "number",
+            "example": 0.94
+          },
+          "childSafe": {
+            "type": "boolean",
+            "example": true
+          },
+          "adultSafe": {
+            "type": "boolean",
+            "example": true
+          },
+          "reason": {
+            "type": "string",
+            "example": "auto_approved_high_confidence_safe"
+          }
+        }
+      }
+    }
+  }
+}

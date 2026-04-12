@@ -160,7 +160,17 @@
     "/works/admin/moderation/review-queue": {
       "get": {
         "operationId": "WorksController_reviewQueue",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by moderation status. Defaults to 'needs_admin_review'. Use 'all' to include rejected items too.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": ""
@@ -172,6 +182,36 @@
           }
         ],
         "summary": "List works awaiting admin moderation review",
+        "tags": [
+          "editor-works"
+        ]
+      }
+    },
+    "/works/admin/{id}": {
+      "get": {
+        "operationId": "WorksController_adminGetById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Work id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "auth_token": []
+          }
+        ],
+        "summary": "Get one work with chapters (admin)",
         "tags": [
           "editor-works"
         ]
@@ -230,6 +270,35 @@
           }
         ],
         "summary": "Reject a work in admin moderation review",
+        "tags": [
+          "editor-works"
+        ]
+      }
+    },
+    "/works/admin/{id}/moderation/flag": {
+      "post": {
+        "operationId": "WorksController_flagByAdmin",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "auth_token": []
+          }
+        ],
+        "summary": "Flag a work for continued review (returns to needs_admin_review)",
         "tags": [
           "editor-works"
         ]
