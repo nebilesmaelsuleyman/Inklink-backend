@@ -70,7 +70,9 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Login with username and password and set auth cookie' })
+  @ApiOperation({
+    summary: 'Login with username and password and set auth cookie',
+  })
   @ApiBody({ type: CreateAuthDto })
   @ApiOkResponse({
     description:

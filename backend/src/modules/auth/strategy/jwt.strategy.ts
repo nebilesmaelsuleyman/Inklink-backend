@@ -22,7 +22,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: { sub: string; username: string; role?: 'user' | 'admin' | 'parent' | 'child'; parentId?: string }) {
+  validate(payload: {
+    sub: string;
+    username: string;
+    role?: 'user' | 'admin' | 'parent' | 'child';
+    parentId?: string;
+  }) {
     return {
       sub: payload.sub,
       username: payload.username,

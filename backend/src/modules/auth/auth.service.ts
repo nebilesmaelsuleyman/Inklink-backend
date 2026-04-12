@@ -51,15 +51,19 @@ export class AuthService {
       throw new BadRequestException('username and password are required');
     }
 
-    const existingUser = await this.usersService.findByUsername(userDto.username);
+    const existingUser = await this.usersService.findByUsername(
+      userDto.username,
+    );
 
     if (existingUser) {
       throw new ConflictException('Username already exists');
     }
 
-    let createdUser:
-      | { _id: unknown; username: string; role?: 'user' | 'admin' | 'parent' | 'child' }
-      | null = null;
+    let createdUser: {
+      _id: unknown;
+      username: string;
+      role?: 'user' | 'admin' | 'parent' | 'child';
+    } | null = null;
 
     try {
       createdUser = await this.usersService.create(userDto);
@@ -74,8 +78,10 @@ export class AuthService {
     const user = {
       sub: String(createdUser._id),
       username: createdUser.username,
-      role: createdUser.role as any || 'user',
-      parentId: (createdUser as any).parentId ? String((createdUser as any).parentId) : undefined,
+      role: (createdUser.role as any) || 'user',
+      parentId: (createdUser as any).parentId
+        ? String((createdUser as any).parentId)
+        : undefined,
     };
 
     const accessToken = await this.jwtService.signAsync(user);
@@ -104,7 +110,9 @@ export class AuthService {
           ? 'none'
           : 'lax';
 
-    const domain = (this.configService.get<string>('auth.cookieDomain') || '').trim();
+    const domain = (
+      this.configService.get<string>('auth.cookieDomain') || ''
+    ).trim();
 
     return {
       httpOnly: true,
@@ -134,8 +142,10 @@ export class AuthService {
     return {
       sub: String(user._id),
       username: user.username,
-      role: user.role as any || 'user',
-      parentId: (user as any).parentId ? String((user as any).parentId) : undefined,
+      role: (user.role as any) || 'user',
+      parentId: (user as any).parentId
+        ? String((user as any).parentId)
+        : undefined,
     };
   }
 }
