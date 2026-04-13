@@ -7,7 +7,10 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import * as Y from 'yjs';
-import { CHAPTER_MODEL_NAME, ChapterDocument } from '../chapters/schema/chapter.schema';
+import {
+  CHAPTER_MODEL_NAME,
+  ChapterDocument,
+} from '../chapters/schema/chapter.schema';
 import { WorkAggregationService } from '../work-aggregation/work-aggregation.service';
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
 import {
@@ -18,7 +21,10 @@ import {
   YJS_SNAPSHOT_MODEL_NAME,
   YjsSnapshotEntity,
 } from './schema/yjs-snapshot.schema';
-import { YJS_UPDATE_MODEL_NAME, YjsUpdateEntity } from './schema/yjs-update.schema';
+import {
+  YJS_UPDATE_MODEL_NAME,
+  YjsUpdateEntity,
+} from './schema/yjs-update.schema';
 
 @Injectable()
 export class YjsPersistenceService {
@@ -63,7 +69,10 @@ export class YjsPersistenceService {
   private async resolveDocument(docId: string, requesterId: string) {
     const parsedId = this.toObjectId(docId, 'docId');
 
-    const byDocumentId = await this.yjsDocumentModel.findById(parsedId).lean().exec();
+    const byDocumentId = await this.yjsDocumentModel
+      .findById(parsedId)
+      .lean()
+      .exec();
     if (byDocumentId) return byDocumentId;
 
     const byChapterId = await this.yjsDocumentModel
@@ -73,7 +82,8 @@ export class YjsPersistenceService {
     if (byChapterId) return byChapterId;
 
     const chapter = await this.chapterModel.findById(parsedId).lean().exec();
-    if (!chapter) throw new NotFoundException('Yjs document not found for docId/chapterId');
+    if (!chapter)
+      throw new NotFoundException('Yjs document not found for docId/chapterId');
 
     const work = await this.workModel.findById(chapter.workId).lean().exec();
     if (!work) throw new NotFoundException('Work not found for chapter');
@@ -92,9 +102,15 @@ export class YjsPersistenceService {
     return created.toObject();
   }
 
-  private async assertDocumentOwner(documentId: Types.ObjectId, requesterId: string) {
+  private async assertDocumentOwner(
+    documentId: Types.ObjectId,
+    requesterId: string,
+  ) {
     const ownerId = this.toObjectId(requesterId, 'requesterId');
-    const owned = await this.yjsDocumentModel.exists({ _id: documentId, ownerId });
+    const owned = await this.yjsDocumentModel.exists({
+      _id: documentId,
+      ownerId,
+    });
     if (!owned) {
       throw new ForbiddenException('You do not have access to this document');
     }
@@ -128,76 +144,70 @@ export class YjsPersistenceService {
     return { doc, lastSeq };
   }
 
-async appendUpdate(docId: string, requesterId: string, base64Update: string) {
-   const yjsDoc = await this.resolveDocument(docId, requesterId);
-   const documentId = new Types.ObjectId(yjsDoc._id);
-   await this.assertDocumentOwner(documentId, requesterId);
-   const updateBytes = this.decodeBase64(base64Update, 'update');
+  async appendUpdate(docId: string, requesterId: string, base64Update: string) {
+    const yjsDoc = await this.resolveDocument(docId, requesterId);
+    const documentId = new Types.ObjectId(yjsDoc._id);
+    await this.assertDocumentOwner(documentId, requesterId);
+    const updateBytes = this.decodeBase64(base64Update, 'update');
 
+    const moderationUpdateResult = await this.chapterModel
+      .updateOne(
+        {
+          _id: yjsDoc.chapterId,
+          moderationStatus: 'approved',
+        } as any,
+        {
+          $set: {
+            moderationStatus: 'needs_admin_review',
+            moderationReason: 'yjs_update_requires_review',
+            moderationUpdatedAt: new Date(),
+          },
+          $unset: {
+            moderationConfidence: '',
+            childSafe: '',
+            adultSafe: '',
+          },
+        },
+      )
+      .exec();
 
-   const moderationUpdateResult = await this.chapterModel
-     .updateOne(
-       {
-         _id: yjsDoc.chapterId,
-         moderationStatus: 'approved',
-       } as any,
-       {
-         $set: {
-           moderationStatus: 'needs_admin_review',
-           moderationReason: 'yjs_update_requires_review',
-           moderationUpdatedAt: new Date(),
-         },
-         $unset: {
-           moderationConfidence: '',
-           childSafe: '',
-           adultSafe: '',
-         },
-       },
-     )
-     .exec();
+    if ((moderationUpdateResult as any)?.modifiedCount > 0) {
+      await this.workAggregationService.recomputeAndPersist(
+        new Types.ObjectId(yjsDoc.workId),
+        { clearReviewed: true },
+      );
+    }
 
-   if ((moderationUpdateResult as any)?.modifiedCount > 0) {
-     await this.workAggregationService.recomputeAndPersist(
-       new Types.ObjectId(yjsDoc.workId),
-       { clearReviewed: true },
-     );
-   }
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const latest = await this.yjsUpdateModel
+        .findOne({ documentId })
+        .sort({ seq: -1 })
+        .lean()
+        .exec();
+      const nextSeq = latest ? latest.seq + 1 : 1;
 
+      try {
+        const created = await this.yjsUpdateModel.create({
+          documentId,
+          seq: nextSeq,
+          update: Buffer.from(updateBytes),
+        });
 
-   for (let attempt = 0; attempt < 3; attempt += 1) {
-     const latest = await this.yjsUpdateModel
-       .findOne({ documentId })
-       .sort({ seq: -1 })
-       .lean()
-       .exec();
-     const nextSeq = latest ? latest.seq + 1 : 1;
+        return {
+          ok: true,
+          documentId: documentId.toString(),
+          seq: created.seq,
+          createdAt: created.createdAt,
+        };
+      } catch (error: any) {
+        if (error?.code !== 11000 || attempt === 2) {
+          throw error;
+        }
+      }
+    }
 
-
-     try {
-       const created = await this.yjsUpdateModel.create({
-         documentId,
-         seq: nextSeq,
-         update: Buffer.from(updateBytes),
-       });
-
-
-       return {
-         ok: true,
-         documentId: documentId.toString(),
-         seq: created.seq,
-         createdAt: created.createdAt,
-       };
-     } catch (error: any) {
-       if (error?.code !== 11000 || attempt === 2) {
-         throw error;
-       }
-     }
-   }
-
-
-   throw new BadRequestException('Could not append update');
- }
-
+    throw new BadRequestException('Could not append update');
+  }
 
   async getState(docId: string, requesterId: string) {
     const yjsDoc = await this.resolveDocument(docId, requesterId);
