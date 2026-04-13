@@ -7,7 +7,11 @@ import { USER_MODEL_NAME, UserSchema } from './user.schema';
 const userImports =
   process.env.DISABLE_DB === 'true'
     ? []
-    : [MongooseModule.forFeature([{ name: USER_MODEL_NAME, schema: UserSchema }])];
+    : [
+        MongooseModule.forFeature([
+          { name: USER_MODEL_NAME, schema: UserSchema },
+        ]),
+      ];
 
 @Module({
   imports: [...userImports],
