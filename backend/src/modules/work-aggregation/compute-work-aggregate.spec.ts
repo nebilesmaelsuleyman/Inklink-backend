@@ -166,4 +166,3 @@ describe('computeWorkAggregateFromChapters', () => {
     expect(result.adultSafe).toBeUndefined();
   });
 });
-
