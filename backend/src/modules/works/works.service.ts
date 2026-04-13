@@ -135,12 +135,45 @@ export class WorksService {
     return works.map((work) => this.mapWork(work));
   }
 
-  async getById(id: string, requesterId: string) {
-    const workId = this.toObjectId(id);
-    await this.assertWorkOwner(workId, requesterId);
+  async browse(requesterId: string, role: string, tag?: string) {
+    const query: any = { status: 'published' };
+    if (tag) {
+      query.tags = tag;
+    }
 
+    if (role === 'child') {
+      query.childSafe = true;
+    }
+
+    const works = await this.workModel
+      .find(query)
+      .sort({ updatedAt: -1 })
+      .lean()
+      .exec();
+
+    return works.map((work) => this.mapWork(work));
+  }
+
+  async getById(id: string, requesterId: string, role?: string) {
+    const workId = this.toObjectId(id);
+    
     const work = await this.workModel.findById(workId).lean().exec();
     if (!work) throw new NotFoundException('Work not found');
+
+    // Security: Prevent children from fetching unsafe data manually
+    if (role === 'child' && !work.childSafe) {
+      throw new ForbiddenException('This work is not accessible in Children Mode');
+    }
+
+    // Ownership check only if it's not published or if we want to restricted access
+    // But usually for reading, if it's published, everyone can see it.
+    // If not published, only owner can see it.
+    if (work.status !== 'published') {
+        const ownerId = this.toObjectId(requesterId, 'requesterId');
+        if (work.authorId.toString() !== ownerId.toString()) {
+            throw new ForbiddenException('You do not have access to this work');
+        }
+    }
 
     const chapters = await this.chaptersService.listByWork(id, requesterId);
     return {
