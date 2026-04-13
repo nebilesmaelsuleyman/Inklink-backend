@@ -53,21 +53,32 @@ export class YjsController {
     @Body('update') update: string,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.yjsPersistenceService.appendUpdate(docId, request.user.sub, update);
+    return this.yjsPersistenceService.appendUpdate(
+      docId,
+      request.user.sub,
+      update,
+    );
   }
 
   @Get('docs/:docId/state')
   @ApiOperation({ summary: 'Get full Yjs state + state vector (base64)' })
   @ApiParam({ name: 'docId', description: 'Yjs document id or chapter id' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  getState(@Param('docId') docId: string, @Req() request: AuthenticatedRequest) {
+  getState(
+    @Param('docId') docId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.yjsPersistenceService.getState(docId, request.user.sub);
   }
 
   @Get('docs/:docId/diff')
   @ApiOperation({ summary: 'Get Yjs diff from provided state vector' })
   @ApiParam({ name: 'docId', description: 'Yjs document id or chapter id' })
-  @ApiQuery({ name: 'sv', required: true, description: 'base64-encoded state vector' })
+  @ApiQuery({
+    name: 'sv',
+    required: true,
+    description: 'base64-encoded state vector',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   getDiff(
     @Param('docId') docId: string,
