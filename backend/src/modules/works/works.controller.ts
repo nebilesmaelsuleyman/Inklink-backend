@@ -30,7 +30,8 @@ type AuthenticatedRequest = Request & {
   user: {
     sub: string;
     username: string;
-    role: 'user' | 'admin';
+    role: 'user' | 'admin' | 'parent' | 'child';
+    parentId?: string;
   };
 };
 
@@ -60,12 +61,20 @@ export class WorksController {
     return this.worksService.list(request.user.sub, authorId);
   }
 
+  @Get('browse')
+  @ApiOperation({ summary: 'Browse all published works' })
+  @ApiQuery({ name: 'tag', required: false })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  browse(@Req() request: AuthenticatedRequest, @Query('tag') tag?: string) {
+    return this.worksService.browse(request.user.sub, request.user.role, tag);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get one work with chapters' })
   @ApiParam({ name: 'id', description: 'Work id' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
   getById(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-    return this.worksService.getById(id, request.user.sub);
+    return this.worksService.getById(id, request.user.sub, request.user.role);
   }
 
   @Patch(':id')
