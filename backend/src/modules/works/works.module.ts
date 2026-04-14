@@ -6,15 +6,14 @@ import { WORK_MODEL_NAME, WorkSchema } from './schema/work.schema';
 import { WorksController } from './works.controller';
 import { WorksService } from './works.service';
 
-
 @Module({
- imports: [
-   MongooseModule.forFeature([{ name: WORK_MODEL_NAME, schema: WorkSchema }]),
-   ChaptersModule,
-   ModerationModule,
- ],
- controllers: [WorksController],
- providers: [WorksService],
- exports: [WorksService, MongooseModule],
+  imports: [
+    MongooseModule.forFeature([{ name: WORK_MODEL_NAME, schema: WorkSchema }]),
+    ChaptersModule,
+    ModerationModule,
+  ],
+  controllers: [WorksController],
+  providers: [WorksService],
+  exports: [WorksService, MongooseModule],
 })
 export class WorksModule {}
