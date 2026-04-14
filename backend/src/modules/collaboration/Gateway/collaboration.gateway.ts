@@ -38,7 +38,10 @@ export class CollaborationGateway
     const room = await this.roomService.getOrCreate(roomName);
 
     if (!this.hydratedRooms.has(roomName) && room.connections.size === 0) {
-      const persisted = await this.yjsPersistenceService.getState(roomName, userId);
+      const persisted = await this.yjsPersistenceService.getState(
+        roomName,
+        userId,
+      );
       const persistedUpdate = Buffer.from(persisted.state, 'base64');
       if (persistedUpdate.length > 0) {
         Y.applyUpdate(room.doc, new Uint8Array(persistedUpdate), 'bootstrap');
@@ -55,7 +58,9 @@ export class CollaborationGateway
     client.send(MessageProtocol.encode(MessageType.Sync, state));
 
     // initial awareness (if any)
-    const awarenessClientIds = Array.from(room.awareness.getStates().keys()) as number[];
+    const awarenessClientIds = Array.from(
+      room.awareness.getStates().keys(),
+    ) as number[];
     if (awarenessClientIds.length > 0) {
       const awarenessUpdate = awarenessProtocol.encodeAwarenessUpdate(
         room.awareness,
@@ -115,7 +120,11 @@ export class CollaborationGateway
           }
           break;
         case MessageType.Awareness:
-          awarenessProtocol.applyAwarenessUpdate(room.awareness, payload, client);
+          awarenessProtocol.applyAwarenessUpdate(
+            room.awareness,
+            payload,
+            client,
+          );
           break;
       }
     } catch {
@@ -147,7 +156,10 @@ export class CollaborationGateway
     return url.searchParams.get('room') || 'default';
   }
 
-  private getCookieValue(cookieHeader: string | undefined, key: string): string | null {
+  private getCookieValue(
+    cookieHeader: string | undefined,
+    key: string,
+  ): string | null {
     if (!cookieHeader) return null;
     const chunks = cookieHeader.split(';');
     for (const chunk of chunks) {
@@ -177,7 +189,8 @@ export class CollaborationGateway
         username: string;
       }>(token, {
         secret:
-          this.configService.get<string>('auth.jwtSecret') || 'change-me-in-env',
+          this.configService.get<string>('auth.jwtSecret') ||
+          'change-me-in-env',
       });
 
       return payload?.sub || null;

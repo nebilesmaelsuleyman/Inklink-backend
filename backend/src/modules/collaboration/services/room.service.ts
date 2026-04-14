@@ -27,7 +27,9 @@ export class RoomService {
       };
       doc.on('update', (update: Uint8Array, origin: unknown) => {
         const message = MessageProtocol.encode(MessageType.Sync, update);
-        const except = room!.connections.has(origin as WebSocket) ? (origin as WebSocket) : undefined;
+        const except = room!.connections.has(origin as WebSocket)
+          ? (origin as WebSocket)
+          : undefined;
         this.broadcast(room!, message, except);
       });
 
@@ -39,7 +41,9 @@ export class RoomService {
           MessageType.Awareness,
           awarenessProtocol.encodeAwarenessUpdate(room!.awareness, changed),
         );
-        const except = room!.connections.has(origin as WebSocket) ? (origin as WebSocket) : undefined;
+        const except = room!.connections.has(origin as WebSocket)
+          ? (origin as WebSocket)
+          : undefined;
         this.broadcast(room!, message, except);
       });
       this.rooms.set(roomName, room);
