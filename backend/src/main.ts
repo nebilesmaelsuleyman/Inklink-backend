@@ -21,7 +21,9 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Ink Link Backend API')
-    .setDescription('Authentication + Editor (Works, Chapters, Yjs collaboration persistence) endpoints')
+    .setDescription(
+      'Authentication + Editor (Works, Chapters, Yjs collaboration persistence) endpoints',
+    )
     .setVersion('1.0')
     .addCookieAuth('auth_token', {
       type: 'apiKey',
@@ -32,7 +34,13 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig, {
-    include: [AuthModule, WorksModule, ChaptersModule, YjsModule, ModerationModule],
+    include: [
+      AuthModule,
+      WorksModule,
+      ChaptersModule,
+      YjsModule,
+      ModerationModule,
+    ],
   });
 
   SwaggerModule.setup('api/docs', app, document);
