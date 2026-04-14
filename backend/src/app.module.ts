@@ -13,6 +13,8 @@ import { ModerationModule } from './modules/moderation/moderation.module';
 import { UsersModule } from './modules/users/users.module';
 import { WorksModule } from './modules/works/works.module';
 import { YjsModule } from './modules/yjs/yjs.module';
+import { LibraryModule } from './modules/library/library.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 loadEnv({ path: '.env' });
 
@@ -33,6 +35,8 @@ const optionalImports =
     UsersModule,
     CollaborationModule,
     ModerationModule,
+    LibraryModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
