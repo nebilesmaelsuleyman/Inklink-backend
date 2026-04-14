@@ -10,7 +10,11 @@ export interface ChatMessage extends Document<Types.ObjectId> {
 
 export const ChatMessageSchema = new Schema<ChatMessage>(
   {
-    chatRoomId: { type: Schema.Types.ObjectId, ref: 'ChatRoom', required: true },
+    chatRoomId: {
+      type: Schema.Types.ObjectId,
+      ref: 'ChatRoom',
+      required: true,
+    },
     userId: { type: String, required: true, index: true },
     content: { type: String, required: true, trim: true, maxlength: 5000 },
   },
@@ -18,4 +22,3 @@ export const ChatMessageSchema = new Schema<ChatMessage>(
 );
 
 ChatMessageSchema.index({ chatRoomId: 1, createdAt: -1 });
-

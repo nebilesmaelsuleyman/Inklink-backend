@@ -4,15 +4,14 @@ export type ChatRoomKind = 'author' | 'direct' | 'group';
 
 export interface ChatRoomType {
   _id: Types.ObjectId;
-  type: ChatRoomKind;      
-  authorId?: string;    
-  directKey?: string;      
-  title?: string;         
-  createdBy?: string;     
+  type: ChatRoomKind;
+  authorId?: string;
+  directKey?: string;
+  title?: string;
+  createdBy?: string;
   createdAt: Date;
   updatedAt: Date;
 }
-
 
 export const ChatRoomSchema = new Schema(
   {
@@ -46,5 +45,3 @@ ChatRoomSchema.index(
     partialFilterExpression: { type: 'direct', directKey: { $exists: true } },
   },
 );
-
-

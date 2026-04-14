@@ -62,7 +62,8 @@ export class ChatService {
     }
 
     if (roomType === 'group') {
-      const isAllowed = membership?.role === 'owner' || membership?.role === 'admin';
+      const isAllowed =
+        membership?.role === 'owner' || membership?.role === 'admin';
       if (isAllowed) return;
       throw new ForbiddenException('Only owner/admin can manage group members');
     }
@@ -78,20 +79,20 @@ export class ChatService {
   }
 
   async getRoomByAuthorId(authorId: string) {
-    const room = await this.ChatModel
-      .findOne({
-        authorId,
-        $or: [{ type: 'author' }, { type: { $exists: false } }],
-      })
+    const room = await this.ChatModel.findOne({
+      authorId,
+      $or: [{ type: 'author' }, { type: { $exists: false } }],
+    })
       .lean()
       .exec();
 
     // Best-effort migrate legacy docs (no type) to 'author'.
     if (room && !(room as any).type) {
       try {
-        await this.ChatModel
-          .updateOne({ _id: room._id }, { $set: { type: 'author' } })
-          .exec();
+        await this.ChatModel.updateOne(
+          { _id: room._id },
+          { $set: { type: 'author' } },
+        ).exec();
       } catch (err: any) {
         if (err?.code !== 11000) throw err;
       }
@@ -117,19 +118,19 @@ export class ChatService {
   }
 
   async getOrCreateRoomForAuthor(authorId: string) {
-    const existing = await this.ChatModel
-      .findOne({
-        authorId,
-        $or: [{ type: 'author' }, { type: { $exists: false } }],
-      })
+    const existing = await this.ChatModel.findOne({
+      authorId,
+      $or: [{ type: 'author' }, { type: { $exists: false } }],
+    })
       .lean()
       .exec();
     if (existing) {
       if (!(existing as any).type) {
         try {
-          await this.ChatModel
-            .updateOne({ _id: existing._id }, { $set: { type: 'author' } })
-            .exec();
+          await this.ChatModel.updateOne(
+            { _id: existing._id },
+            { $set: { type: 'author' } },
+          ).exec();
         } catch (err: any) {
           if (err?.code !== 11000) throw err;
         }
@@ -138,7 +139,10 @@ export class ChatService {
       return existing;
     }
 
-    const created = await this.ChatModel.create({ type: 'author', authorId }) as ChatRoomType & { toObject: () => any };
+    const created = (await this.ChatModel.create({
+      type: 'author',
+      authorId,
+    })) as ChatRoomType & { toObject: () => any };
     await this.ensureMembership(created._id, authorId, 'author');
     return created.toObject();
   }
@@ -192,7 +196,11 @@ export class ChatService {
     }
 
     await this.assertCanManageMembers(roomId, room, roomType, actor);
-    await this.ensureMembership(roomId, member, roomType === 'author' ? 'subscriber' : 'member');
+    await this.ensureMembership(
+      roomId,
+      member,
+      roomType === 'author' ? 'subscriber' : 'member',
+    );
     return { ok: true };
   }
 
@@ -227,5 +235,4 @@ export class ChatService {
 
     return created.toObject();
   }
-
 }
