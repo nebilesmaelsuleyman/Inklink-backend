@@ -38,10 +38,10 @@ type AuthenticatedRequest = Request & {
 @ApiTags('editor-works')
 @ApiCookieAuth('auth_token')
 @Controller('works')
-@UseGuards(JwtAuthGuard)
 export class WorksController {
   constructor(private readonly worksService: WorksService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post()
   @ApiOperation({ summary: 'Create a new work (book)' })
   @ApiBody({ type: CreateWorkDto })
@@ -53,32 +53,43 @@ export class WorksController {
     return this.worksService.create(request.user.sub, createWorkDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Get()
   @ApiOperation({ summary: 'List current user works' })
-  @ApiQuery({ name: 'authorId', required: false, description: 'Must match authenticated user id' })
+  @ApiQuery({
+    name: 'authorId',
+    required: false,
+    description: 'Must match authenticated user id',
+  })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  list(@Req() request: AuthenticatedRequest, @Query('authorId') authorId?: string) {
+  list(
+    @Req() request: AuthenticatedRequest,
+    @Query('authorId') authorId?: string,
+  ) {
     return this.worksService.list(request.user.sub, authorId);
   }
 
   @Get('browse')
   @ApiOperation({ summary: 'Browse all published works' })
   @ApiQuery({ name: 'tag', required: false })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  browse(@Req() request: AuthenticatedRequest, @Query('tag') tag?: string) {
-    return this.worksService.browse(request.user.sub, request.user.role, tag);
+  browse(@Req() request: any, @Query('tag') tag?: string) {
+    const user = request.user;
+    return this.worksService.browse(user?.sub, user?.role, tag);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get one work with chapters' })
   @ApiParam({ name: 'id', description: 'Work id' })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  getById(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-    return this.worksService.getById(id, request.user.sub, request.user.role);
+  getById(@Param('id') id: string, @Req() request: any) {
+    const user = request.user;
+    return this.worksService.getById(id, user?.sub, user?.role);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Patch(':id')
-  @ApiOperation({ summary: 'Update work metadata (title, summary, coverImage, tags)' })
+  @ApiOperation({
+    summary: 'Update work metadata (title, summary, coverImage, tags)',
+  })
   @ApiParam({ name: 'id', description: 'Work id' })
   @ApiBody({ type: UpdateWorkDto })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
@@ -90,6 +101,7 @@ export class WorksController {
     return this.worksService.update(id, request.user.sub, updateWorkDto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post(':id/publish')
   @ApiOperation({ summary: 'Publish work' })
   @ApiParam({ name: 'id', description: 'Work id' })
@@ -108,7 +120,10 @@ export class WorksController {
   @Post('admin/:id/moderation/approve')
   @UseGuards(AdminRoleGuard)
   @ApiOperation({ summary: 'Approve a work in admin moderation review' })
-  approveByAdmin(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+  approveByAdmin(
+    @Param('id') id: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.worksService.adminApprove(id, request.user.sub);
   }
 
@@ -118,13 +133,12 @@ export class WorksController {
   rejectByAdmin(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.worksService.adminReject(id, request.user.sub);
   }
-  
- @Delete(':id')
- @ApiOperation({ summary: 'Delete work' })
- @ApiParam({ name: 'id', description: 'Work id' })
- @ApiUnauthorizedResponse({ description: 'Unauthorized' })
- delete(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
-   return this.worksService.delete(id, request.user.sub);
- }
 
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete work' })
+  @ApiParam({ name: 'id', description: 'Work id' })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  delete(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.worksService.delete(id, request.user.sub);
+  }
 }
