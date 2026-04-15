@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { NotificationType } from '../notifications/schemas/notification.schema';
+import { NotificationsService } from '../notifications/notifications.service';
+import { LibraryService } from '../library/library.service';
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
+import { USER_MODEL_NAME, UserDocument } from '../users/user.schema';
 import { CreateChapterDto } from './dto/create-chapter.dto';
 import { ReorderChaptersDto } from './dto/reorder-chapters.dto';
 import { UpdateChapterDto } from './dto/update-chapter.dto';
@@ -20,8 +24,11 @@ export class ChaptersService {
     private readonly chapterModel: Model<ChapterDocument>,
     @InjectModel(WORK_MODEL_NAME)
     private readonly workModel: Model<WorkDocument>,
+    @InjectModel(USER_MODEL_NAME)
+    private readonly userModel: Model<UserDocument>,
     private readonly moderationService: ModerationService,
-
+    private readonly libraryService: LibraryService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private toObjectId(id: string, field = 'id') {
@@ -33,41 +40,38 @@ export class ChaptersService {
 
   private mapChapter(chapter: any) {
     return {
-     id: chapter._id.toString(),
-     workId: chapter.workId.toString(),
-     title: chapter.title,
-     orderIndex: chapter.orderIndex,
-     contentText: chapter.contentText,
-     moderationStatus: chapter.moderationStatus,
-     moderationConfidence: chapter.moderationConfidence,
-     moderationReason: chapter.moderationReason,
-     childSafe: chapter.childSafe,
-     adultSafe: chapter.adultSafe,
-     moderationUpdatedAt: chapter.moderationUpdatedAt,
-     createdAt: chapter.createdAt,
-     updatedAt: chapter.updatedAt,
-
+      id: chapter._id.toString(),
+      workId: chapter.workId.toString(),
+      title: chapter.title,
+      orderIndex: chapter.orderIndex,
+      contentText: chapter.contentText,
+      moderationStatus: chapter.moderationStatus,
+      moderationConfidence: chapter.moderationConfidence,
+      moderationReason: chapter.moderationReason,
+      childSafe: chapter.childSafe,
+      adultSafe: chapter.adultSafe,
+      moderationUpdatedAt: chapter.moderationUpdatedAt,
+      createdAt: chapter.createdAt,
+      updatedAt: chapter.updatedAt,
     };
   }
 
-
-private async evaluateAndBuildModerationFields(text: string) {
-   const result = await this.moderationService.moderateText(text);
-   return {
-     moderationStatus:
-       result.decision === 'approved'
-         ? 'approved'
-         : result.decision === 'rejected'
-           ? 'rejected'
-           : 'needs_admin_review',
-     moderationConfidence: result.confidence,
-     moderationReason: result.reason,
-     childSafe: result.childSafe,
-     adultSafe: result.adultSafe,
-     moderationUpdatedAt: new Date(),
-   };
- }
-
+  private async evaluateAndBuildModerationFields(text: string) {
+    const result = await this.moderationService.moderateText(text);
+    return {
+      moderationStatus:
+        result.decision === 'approved'
+          ? 'approved'
+          : result.decision === 'rejected'
+            ? 'rejected'
+            : 'needs_admin_review',
+      moderationConfidence: result.confidence,
+      moderationReason: result.reason,
+      childSafe: result.childSafe,
+      adultSafe: result.adultSafe,
+      moderationUpdatedAt: new Date(),
+    };
+  }
 
   private async ensureWorkExists(workId: Types.ObjectId) {
     const exists = await this.workModel.exists({ _id: workId });
@@ -76,11 +80,18 @@ private async evaluateAndBuildModerationFields(text: string) {
 
   private async assertWorkOwner(workId: Types.ObjectId, requesterId: string) {
     const ownerId = this.toObjectId(requesterId, 'requesterId');
-    const owned = await this.workModel.exists({ _id: workId, authorId: ownerId });
-    if (!owned) throw new ForbiddenException('You do not have access to this work');
+    const owned = await this.workModel.exists({
+      _id: workId,
+      authorId: ownerId,
+    });
+    if (!owned)
+      throw new ForbiddenException('You do not have access to this work');
   }
 
-  private async assertChapterOwner(chapterId: Types.ObjectId, requesterId: string) {
+  private async assertChapterOwner(
+    chapterId: Types.ObjectId,
+    requesterId: string,
+  ) {
     const chapter = await this.chapterModel.findById(chapterId).lean().exec();
     if (!chapter) throw new NotFoundException('Chapter not found');
 
@@ -88,9 +99,69 @@ private async evaluateAndBuildModerationFields(text: string) {
     return chapter;
   }
 
+  /** Dispatch chapter notifications to all users who bookmarked the work. Fire-and-forget. */
+  private async dispatchChapterNotifications(
+    workId: Types.ObjectId,
+    chapterTitle: string,
+  ): Promise<void> {
+    try {
+      const work = await this.workModel.findById(workId).lean().exec();
+      if (!work) return;
+
+      const author = await this.userModel
+        .findById(work.authorId)
+        .select('username')
+        .lean()
+        .exec();
+      const authorName = author?.username ?? 'Unknown Author';
+
+      const userIds = await this.libraryService.findUsersWhoBookmarked(
+        workId.toString(),
+      );
+
+      const recipientIds = userIds.filter(
+        (uid) => uid !== work.authorId.toString(),
+      );
+
+      await Promise.all(
+        recipientIds.map((userId) =>
+          this.notificationsService.createNotification({
+            userId: new Types.ObjectId(userId),
+            type: NotificationType.CHAPTER,
+            title: `New chapter in "${work.title}"`,
+            description: `"${chapterTitle}" has been published!`,
+            isRead: false,
+            metadata: {
+              authorName,
+              bookTitle: work.title,
+              bookImage: work.coverImage,
+              referenceId: workId.toString(),
+            },
+          }),
+        ),
+      );
+    } catch (err) {
+      // Notifications are non-critical — log and continue
+      console.error('[ChaptersService] Failed to dispatch notifications:', err);
+    }
+  }
+
   async listByWork(workId: string, requesterId: string) {
     const parsedWorkId = this.toObjectId(workId, 'workId');
     await this.assertWorkOwner(parsedWorkId, requesterId);
+
+    const chapters = await this.chapterModel
+      .find({ workId: parsedWorkId })
+      .sort({ orderIndex: 1, createdAt: 1 })
+      .lean()
+      .exec();
+
+    return chapters.map((chapter) => this.mapChapter(chapter));
+  }
+
+  /** Public listing for published works — no ownership check. */
+  async listPublicByWork(workId: string) {
+    const parsedWorkId = this.toObjectId(workId, 'workId');
 
     const chapters = await this.chapterModel
       .find({ workId: parsedWorkId })
@@ -133,140 +204,149 @@ private async evaluateAndBuildModerationFields(text: string) {
       )),
     });
 
+    // Fire-and-forget: notify bookmarkers of this work
+    void this.dispatchChapterNotifications(parsedWorkId, title);
+
     return this.mapChapter(created.toObject());
   }
 
-  async update(id: string, requesterId: string, updateChapterDto: UpdateChapterDto) {
-   const chapterId = this.toObjectId(id);
-   await this.assertChapterOwner(chapterId, requesterId);
+  async update(
+    id: string,
+    requesterId: string,
+    updateChapterDto: UpdateChapterDto,
+  ) {
+    const chapterId = this.toObjectId(id);
+    await this.assertChapterOwner(chapterId, requesterId);
 
+    const updatePayload: any = {};
 
-   const updatePayload: any = {};
+    if (typeof updateChapterDto.title === 'string') {
+      const title = updateChapterDto.title.trim();
+      if (!title) throw new BadRequestException('title cannot be empty');
+      updatePayload.title = title;
+    }
 
+    if (typeof updateChapterDto.contentText === 'string') {
+      updatePayload.contentText = updateChapterDto.contentText;
+    }
 
-   if (typeof updateChapterDto.title === 'string') {
-     const title = updateChapterDto.title.trim();
-     if (!title) throw new BadRequestException('title cannot be empty');
-     updatePayload.title = title;
-   }
+    if (
+      typeof updateChapterDto.title === 'string' ||
+      typeof updateChapterDto.contentText === 'string'
+    ) {
+      const current = await this.chapterModel.findById(chapterId).lean().exec();
+      if (!current) throw new NotFoundException('Chapter not found');
 
+      const nextTitle =
+        typeof updatePayload.title === 'string'
+          ? updatePayload.title
+          : current.title;
+      const nextContent =
+        typeof updatePayload.contentText === 'string'
+          ? updatePayload.contentText
+          : current.contentText || '';
 
-   if (typeof updateChapterDto.contentText === 'string') {
-     updatePayload.contentText = updateChapterDto.contentText;
-   }
+      Object.assign(
+        updatePayload,
+        await this.evaluateAndBuildModerationFields(
+          [nextTitle, nextContent].join('\n\n'),
+        ),
+      );
+    }
 
+    const updated = await this.chapterModel
+      .findByIdAndUpdate(chapterId, { $set: updatePayload }, { new: true })
+      .lean()
+      .exec();
 
-   if (typeof updateChapterDto.title === 'string' || typeof updateChapterDto.contentText === 'string') {
-     const current = await this.chapterModel.findById(chapterId).lean().exec();
-     if (!current) throw new NotFoundException('Chapter not found');
-
-
-     const nextTitle =
-       typeof updatePayload.title === 'string' ? updatePayload.title : current.title;
-     const nextContent =
-       typeof updatePayload.contentText === 'string'
-         ? updatePayload.contentText
-         : current.contentText || '';
-
-
-     Object.assign(
-       updatePayload,
-       await this.evaluateAndBuildModerationFields([nextTitle, nextContent].join('\n\n')),
-     );
-   }
-
-
-   const updated = await this.chapterModel
-     .findByIdAndUpdate(chapterId, { $set: updatePayload }, { new: true })
-     .lean()
-     .exec();
-
-
-   if (!updated) throw new NotFoundException('Chapter not found');
-   return this.mapChapter(updated);
- }
+    if (!updated) throw new NotFoundException('Chapter not found');
+    return this.mapChapter(updated);
+  }
 
   async remove(id: string, requesterId: string) {
     const chapterId = this.toObjectId(id);
     await this.assertChapterOwner(chapterId, requesterId);
 
-    const deleted = await this.chapterModel.findByIdAndDelete(chapterId).lean().exec();
+    const deleted = await this.chapterModel
+      .findByIdAndDelete(chapterId)
+      .lean()
+      .exec();
     if (!deleted) throw new NotFoundException('Chapter not found');
     return { ok: true };
   }
 
-  async reorder(workId: string, requesterId: string, reorderDto: ReorderChaptersDto) {
-   const parsedWorkId = this.toObjectId(workId, 'workId');
-   await this.ensureWorkExists(parsedWorkId);
-   await this.assertWorkOwner(parsedWorkId, requesterId);
+  async reorder(
+    workId: string,
+    requesterId: string,
+    reorderDto: ReorderChaptersDto,
+  ) {
+    const parsedWorkId = this.toObjectId(workId, 'workId');
+    await this.ensureWorkExists(parsedWorkId);
+    await this.assertWorkOwner(parsedWorkId, requesterId);
 
+    const byChapterIds = Array.isArray(reorderDto.chapterIds)
+      ? reorderDto.chapterIds
+      : [];
+    const byOrders = Array.isArray(reorderDto.orders) ? reorderDto.orders : [];
 
-   const byChapterIds = Array.isArray(reorderDto.chapterIds)
-     ? reorderDto.chapterIds
-     : [];
-   const byOrders = Array.isArray(reorderDto.orders) ? reorderDto.orders : [];
+    let orders: Array<{ id: string; orderIndex: number }> = [];
 
+    if (byChapterIds.length > 0) {
+      orders = byChapterIds.map((id, index) => ({ id, orderIndex: index }));
+    } else if (byOrders.length > 0) {
+      orders = byOrders;
+    } else {
+      throw new BadRequestException('Provide chapterIds or orders');
+    }
 
-   let orders: Array<{ id: string; orderIndex: number }> = [];
+    const chapterObjectIds = orders.map(({ id }) =>
+      this.toObjectId(id, 'chapterId'),
+    );
 
+    const existing = await this.chapterModel
+      .find({ _id: { $in: chapterObjectIds }, workId: parsedWorkId })
+      .lean()
+      .exec();
+    if (existing.length !== orders.length) {
+      throw new BadRequestException('Some chapters do not belong to this work');
+    }
 
-   if (byChapterIds.length > 0) {
-     orders = byChapterIds.map((id, index) => ({ id, orderIndex: index }));
-   } else if (byOrders.length > 0) {
-     orders = byOrders;
-   } else {
-     throw new BadRequestException('Provide chapterIds or orders');
-   }
+    const tempBase = 1_000_000;
 
+    await this.chapterModel.bulkWrite(
+      orders.map((item, index) => ({
+        updateOne: {
+          filter: {
+            _id: this.toObjectId(item.id, 'chapterId'),
+            workId: parsedWorkId,
+          },
+          update: { $set: { orderIndex: tempBase + index } },
+        },
+      })),
+    );
 
-   const chapterObjectIds = orders.map(({ id }) => this.toObjectId(id, 'chapterId'));
+    await this.chapterModel.bulkWrite(
+      orders.map((item) => ({
+        updateOne: {
+          filter: {
+            _id: this.toObjectId(item.id, 'chapterId'),
+            workId: parsedWorkId,
+          },
+          update: { $set: { orderIndex: item.orderIndex } },
+        },
+      })),
+    );
 
+    return this.listByWork(workId, requesterId);
+  }
 
-   const existing = await this.chapterModel
-     .find({ _id: { $in: chapterObjectIds }, workId: parsedWorkId })
-     .lean()
-     .exec();
-   if (existing.length !== orders.length) {
-     throw new BadRequestException('Some chapters do not belong to this work');
-   }
+  async deleteByWork(workId: string, requesterId: string) {
+    const parsedWorkId = this.toObjectId(workId, 'workId');
+    await this.assertWorkOwner(parsedWorkId, requesterId);
 
-
-   const tempBase = 1_000_000;
-
-
-   await this.chapterModel.bulkWrite(
-     orders.map((item, index) => ({
-       updateOne: {
-         filter: {
-           _id: this.toObjectId(item.id, 'chapterId'),
-           workId: parsedWorkId,
-         },
-         update: { $set: { orderIndex: tempBase + index } },
-       },
-     })),
-   );
-
-
-   await this.chapterModel.bulkWrite(
-     orders.map((item) => ({
-       updateOne: {
-         filter: {
-           _id: this.toObjectId(item.id, 'chapterId'),
-           workId: parsedWorkId,
-         },
-         update: { $set: { orderIndex: item.orderIndex } },
-       },
-     })),
-   );
-
-
-   return this.listByWork(workId, requesterId);
- }
-async deleteByWork(workId: string, requesterId: string) {
-  const parsedWorkId = this.toObjectId(workId, 'workId');
-  await this.assertWorkOwner(parsedWorkId, requesterId);
-
-  const result = await this.chapterModel.deleteMany({ workId: parsedWorkId }).exec();
-  return { deletedCount: result.deletedCount };
-}
+    const result = await this.chapterModel
+      .deleteMany({ workId: parsedWorkId })
+      .exec();
+    return { deletedCount: result.deletedCount };
+  }
 }
