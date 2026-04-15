@@ -48,14 +48,21 @@ export class ChaptersController {
     @Body() createChapterDto: CreateChapterDto,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.chaptersService.create(workId, request.user.sub, createChapterDto);
+    return this.chaptersService.create(
+      workId,
+      request.user.sub,
+      createChapterDto,
+    );
   }
 
   @Get('works/:workId/chapters')
   @ApiOperation({ summary: 'List work chapters' })
   @ApiParam({ name: 'workId', description: 'Work id' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  listByWork(@Param('workId') workId: string, @Req() request: AuthenticatedRequest) {
+  listByWork(
+    @Param('workId') workId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
     return this.chaptersService.listByWork(workId, request.user.sub);
   }
 
