@@ -15,6 +15,8 @@ import { WorksModule } from './modules/works/works.module';
 import { YjsModule } from './modules/yjs/yjs.module';
 import { LibraryModule } from './modules/library/library.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ProfileModule } from './modules/profile/profile.module';
+
 
 loadEnv({ path: '.env' });
 
@@ -37,6 +39,7 @@ const optionalImports =
     ModerationModule,
     LibraryModule,
     NotificationsModule,
+    ProfileModule,
   ],
   controllers: [AppController],
   providers: [AppService],
