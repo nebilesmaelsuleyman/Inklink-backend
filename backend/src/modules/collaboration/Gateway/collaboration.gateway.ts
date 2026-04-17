@@ -42,7 +42,7 @@ export class CollaborationGateway
     }
 
     const roomName = this.extractRoom(req); // chapterId
-    
+
     // Permission Check
     try {
       const chapter = await this.chaptersService.findOneById(roomName);
@@ -51,14 +51,19 @@ export class CollaborationGateway
         return;
       }
 
-      const work = await this.worksService.findOneById(chapter.workId.toString());
+      const work = await this.worksService.findOneById(
+        chapter.workId.toString(),
+      );
       if (!work) {
         client.close(4404, 'Work not found');
         return;
       }
 
       const isOwner = work.authorId.toString() === userId;
-      const isCollab = await this.collaborationService.isCollaborator(work._id.toString(), userId);
+      const isCollab = await this.collaborationService.isCollaborator(
+        work._id.toString(),
+        userId,
+      );
 
       if (!isOwner && !isCollab) {
         client.close(4403, 'Forbidden');
