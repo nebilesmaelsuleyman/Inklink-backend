@@ -33,6 +33,7 @@ export interface WorkDocument extends Document {
   summary: string;
   coverImage?: string;
   tags: string[];
+  language: 'en' | 'am';
   status: WorkStatus;
   chaptersMeta: WorkChapterMeta[];
   moderationConfidence?: number;
@@ -60,6 +61,7 @@ export const WorkSchema = new Schema<WorkDocument>(
     summary: { type: String, default: '', trim: true },
     coverImage: { type: String, required: false },
     tags: { type: [String], default: [] },
+    language: { type: String, enum: ['en', 'am'], default: 'en' },
     averageRating: { type: Number, default: 0 },
     ratingsCount: { type: Number, default: 0 },
     status: {
