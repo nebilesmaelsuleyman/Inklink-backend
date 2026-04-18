@@ -9,6 +9,7 @@ import { WorksService } from './works.service';
 import { CollaborationModule } from '../collaboration/collaboration.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ProfileSchema } from '../profile/profile.model';
+import { TtsModule } from '../tts/tts.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ProfileSchema } from '../profile/profile.model';
     ReactionsModule,
     ModerationModule,
     NotificationsModule,
+    TtsModule,
     forwardRef(() => CollaborationModule),
   ],
   controllers: [WorksController],

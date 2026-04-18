@@ -32,7 +32,7 @@ export class WorksService {
     private readonly notificationsService: NotificationsService,
     @InjectModel('Profile')
     private readonly profileModel: Model<Profile>,
-  ) { }
+  ) {}
 
   async findOneById(id: string) {
     const workId = this.toObjectId(id);
@@ -91,7 +91,10 @@ export class WorksService {
       .exec();
 
     return new Map<string, string>(
-      authors.map((author: any) => [author._id.toString(), author.username || '']),
+      authors.map((author: any) => [
+        author._id.toString(),
+        author.username || '',
+      ]),
     );
   }
 
@@ -302,7 +305,10 @@ export class WorksService {
       }
 
       const isOwner = authorIdStr === requesterId;
-      const isCollab = await this.collaborationService.isCollaborator(id, requesterId);
+      const isCollab = await this.collaborationService.isCollaborator(
+        id,
+        requesterId,
+      );
 
       if (!isOwner && !isCollab) {
         throw new ForbiddenException('You do not have access to this work');
@@ -430,7 +436,11 @@ export class WorksService {
     // Notify followers
     try {
       const authorProfile = await this.profileModel.findById(updated.authorId);
-      if (authorProfile && authorProfile.followers && authorProfile.followers.length > 0) {
+      if (
+        authorProfile &&
+        authorProfile.followers &&
+        authorProfile.followers.length > 0
+      ) {
         const notificationPromises = authorProfile.followers.map((followerId) =>
           this.notificationsService.createNotification({
             userId: followerId,
@@ -568,7 +578,6 @@ export class WorksService {
       )
       .lean()
       .exec();
-
 
     if (!updated) throw new NotFoundException('Work not found');
     return this.mapWork(updated);
