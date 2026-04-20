@@ -29,8 +29,8 @@ export class AuthService {
   ) {}
 
   async login(credentials: CreateAuthDto) {
-    if (!credentials?.username || !credentials?.password) {
-      throw new BadRequestException('username and password are required');
+    if (!credentials?.email || !credentials?.password) {
+      throw new BadRequestException('email and password are required');
     }
 
     const user = await this.validateCredentials(credentials);
@@ -118,7 +118,7 @@ export class AuthService {
       httpOnly: true,
       sameSite,
       secure: this.configService.get<boolean>('auth.cookieSecure') || false,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 1 * 60 * 60 * 1000,
       path: '/',
       ...(domain ? { domain } : {}),
     };
@@ -127,7 +127,7 @@ export class AuthService {
   private async validateCredentials(
     credentials: CreateAuthDto,
   ): Promise<AuthenticatedUser | null> {
-    const user = await this.usersService.findByUsername(credentials.username);
+    const user = await this.usersService.findByEmail(credentials.email);
 
     if (!user) {
       return null;

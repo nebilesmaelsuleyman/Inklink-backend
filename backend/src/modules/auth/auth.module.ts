@@ -18,7 +18,7 @@ import { UsersModule } from '../users/users.module';
         secret: configService.get<string>('auth.jwtSecret'),
         signOptions: {
           expiresIn:
-            configService.get<number>('auth.jwtExpiresInSeconds') || 604800,
+            configService.get<number>('auth.jwtExpiresInSeconds') || 3600,
         },
       }),
     }),

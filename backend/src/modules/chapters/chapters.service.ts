@@ -57,20 +57,32 @@ export class ChaptersService {
   }
 
   private async evaluateAndBuildModerationFields(text: string) {
-    const result = await this.moderationService.moderateText(text);
-    return {
-      moderationStatus:
-        result.decision === 'approved'
-          ? 'approved'
-          : result.decision === 'rejected'
-            ? 'rejected'
-            : 'needs_admin_review',
-      moderationConfidence: result.confidence,
-      moderationReason: result.reason,
-      childSafe: result.childSafe,
-      adultSafe: result.adultSafe,
-      moderationUpdatedAt: new Date(),
-    };
+    try {
+      const result = await this.moderationService.moderateText(text);
+      return {
+        moderationStatus:
+          result.decision === 'approved'
+            ? 'approved'
+            : result.decision === 'rejected'
+              ? 'rejected'
+              : 'needs_admin_review',
+        moderationConfidence: result.confidence,
+        moderationReason: result.reason,
+        childSafe: result.childSafe,
+        adultSafe: result.adultSafe,
+        moderationUpdatedAt: new Date(),
+      };
+    } catch (err) {
+      console.warn('Moderation service failed, falling back to admin review', err);
+      return {
+        moderationStatus: 'needs_admin_review',
+        moderationConfidence: 0,
+        moderationReason: 'Moderation service unavailable. Manual review required.',
+        childSafe: false,
+        adultSafe: false,
+        moderationUpdatedAt: new Date(),
+      };
+    }
   }
 
   private async ensureWorkExists(workId: Types.ObjectId) {
