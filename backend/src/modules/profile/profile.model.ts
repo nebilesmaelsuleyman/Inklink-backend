@@ -1,19 +1,22 @@
 import { Schema, model } from 'mongoose';
 import { Profile } from './profile.type';
 
-const profileSchema = new Schema<Profile>({
-  name: { type: String, required: true },
-  username: { type: String, required: true, unique: true },
-  profilePicture: { type: String },
-  bio: { type: String },
+export const PROFILE_MODEL_NAME = 'Profile';
 
-  followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-  likes: { type: Number, default: 0 },
+export const ProfileSchema = new Schema<Profile>(
+  {
+    name: { type: String, required: true },
+    username: { type: String, required: true, unique: true },
+    profilePicture: { type: String },
+    bio: { type: String },
 
-  readingList: [{ type: Schema.Types.ObjectId, ref: 'Book' }],
-  favoriteBook: { type: Schema.Types.ObjectId, ref: 'Book' },
+    followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    likes: { type: Number, default: 0 },
 
-  isCreator: { type: Boolean, default: false },
-});
+    readingList: [{ type: Schema.Types.ObjectId, ref: 'Book' }],
+    favoriteBook: { type: Schema.Types.ObjectId, ref: 'Book' },
 
-export const ProfileModel = model<Profile>('Profile', profileSchema);
+    isCreator: { type: Boolean, default: false },
+  },
+  { timestamps: true },
+);

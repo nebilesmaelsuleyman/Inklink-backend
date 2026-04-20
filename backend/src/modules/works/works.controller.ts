@@ -22,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { AdminRoleGuard } from '../../common/guards/admin-role.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CreateWorkDto } from './dto/create-work.dto';
 import { UpdateWorkDto } from './dto/update-work.dto';
 import { WorksService } from './works.service';
@@ -69,6 +70,7 @@ export class WorksController {
     return this.worksService.list(request.user.sub, authorId);
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('browse')
   @ApiOperation({ summary: 'Browse all published works' })
   @ApiQuery({ name: 'tag', required: false })
@@ -77,6 +79,7 @@ export class WorksController {
     return this.worksService.browse(user?.sub, user?.role, tag);
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id')
   @ApiOperation({ summary: 'Get one work with chapters' })
   @ApiParam({ name: 'id', description: 'Work id' })

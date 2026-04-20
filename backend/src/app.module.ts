@@ -15,13 +15,23 @@ import { WorksModule } from './modules/works/works.module';
 import { YjsModule } from './modules/yjs/yjs.module';
 import { LibraryModule } from './modules/library/library.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ProfileModule } from './modules/profile/profile.module';
+import { ReactionsModule } from './modules/reactions/reactions.module';
+
 
 loadEnv({ path: '.env' });
 
 const optionalImports =
   process.env.DISABLE_DB === 'true'
     ? []
-    : [DatabaseModule, ChatModule, WorksModule, ChaptersModule, YjsModule];
+    : [
+        DatabaseModule,
+        ChatModule,
+        WorksModule,
+        ChaptersModule,
+        ReactionsModule,
+        YjsModule,
+      ];
 
 @Module({
   imports: [
@@ -37,6 +47,7 @@ const optionalImports =
     ModerationModule,
     LibraryModule,
     NotificationsModule,
+    ProfileModule,
   ],
   controllers: [AppController],
   providers: [AppService],

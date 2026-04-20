@@ -8,6 +8,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ChaptersService } from '../chapters/chapters.service';
 import { ModerationService } from '../moderation/moderation.service';
+import { ReactionsService } from '../reactions/reactions.service';
 import { CreateWorkDto } from './dto/create-work.dto';
 import { UpdateWorkDto } from './dto/update-work.dto';
 import { WORK_MODEL_NAME, WorkDocument } from './schema/work.schema';
@@ -18,6 +19,7 @@ export class WorksService {
     @InjectModel(WORK_MODEL_NAME)
     private readonly workModel: Model<WorkDocument>,
     private readonly chaptersService: ChaptersService,
+    private readonly reactionsService: ReactionsService,
     private readonly moderationService: ModerationService,
   ) {}
 
@@ -195,10 +197,27 @@ export class WorksService {
         ? await this.chaptersService.listPublicByWork(id)
         : await this.chaptersService.listByWork(id, requesterId!);
 
+    const reactionSummaries = await this.reactionsService.getSummariesForChapters(
+      {
+        chapterIds: chapters.map((c: any) => c.id || c._id).filter(Boolean),
+        requesterId,
+      },
+    );
+
+    const chaptersWithReactions = chapters.map((chapter: any) => {
+      const key = (chapter.id || chapter._id || '').toString();
+      const summary = reactionSummaries.get(key) || {
+        likesCount: 0,
+        commentsCount: 0,
+        viewerHasLiked: false,
+      };
+      return { ...chapter, ...summary };
+    });
+
     return {
       ...this.mapWork({ ...work, authorId: authorIdStr }),
       authorUsername,
-      chapters,
+      chapters: chaptersWithReactions,
     };
   }
 
