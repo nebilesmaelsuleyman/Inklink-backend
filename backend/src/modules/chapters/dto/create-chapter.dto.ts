@@ -17,4 +17,7 @@ export class CreateChapterDto {
 
   @ApiPropertyOptional({ example: 0 })
   orderIndex?: number;
+
+  @ApiPropertyOptional({ example: 0 })
+  price?: number;
 }
