@@ -15,4 +15,7 @@ export class UpdateChapterDto {
     example: 'Edited plain text content for this chapter.',
   })
   contentText?: string;
+
+  @ApiPropertyOptional({ example: 10.0 })
+  price?: number;
 }
