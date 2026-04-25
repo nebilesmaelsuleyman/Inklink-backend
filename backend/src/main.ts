@@ -14,7 +14,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useWebSocketAdapter(new WsAdapter(app));
   app.use(cookieParser());
-  
+
   // Increase payload size limit for Base64 images
   const express = require('express');
   app.use(express.json({ limit: '10mb' }));
