@@ -1,9 +1,11 @@
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { WorksService } from './modules/works/works.service';
 import { UsersService } from './modules/users/users.service';
-import { NOTIFICATION_MODEL_NAME, NotificationType } from './modules/notifications/schemas/notification.schema';
+import {
+  NOTIFICATION_MODEL_NAME,
+  NotificationType,
+} from './modules/notifications/schemas/notification.schema';
 import { LIBRARY_MODEL_NAME } from './modules/library/schemas/library.schema';
 import { getModelToken } from '@nestjs/mongoose';
 import { WORK_MODEL_NAME } from './modules/works/schema/work.schema';
@@ -33,22 +35,28 @@ async function bootstrap() {
   const books = [
     {
       title: 'The Whispering Woods',
-      summary: 'A group of friends discovers a mysterious forest that seems to speak in riddles. Every tree holds a secret, and every path leads to a forgotten memory.',
+      summary:
+        'A group of friends discovers a mysterious forest that seems to speak in riddles. Every tree holds a secret, and every path leads to a forgotten memory.',
       tags: ['Mystery', 'Adventure', 'Fantasy'],
-      coverImage: 'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2560&auto=format&fit=crop',
+      coverImage:
+        'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2560&auto=format&fit=crop',
     },
     {
       title: 'Beyond the Silver Horizon',
-      summary: 'In a world where the ocean meets the stars, a young navigator sets out to find the legendary Starry Isles.',
+      summary:
+        'In a world where the ocean meets the stars, a young navigator sets out to find the legendary Starry Isles.',
       tags: ['Sci-Fi', 'Epic', 'Stellar'],
-      coverImage: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2672&auto=format&fit=crop',
+      coverImage:
+        'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2672&auto=format&fit=crop',
     },
     {
-      title: 'The Alchemist\'s Debt',
-      summary: 'Elias, a failing alchemist, accidentally creates a potion that turns shadows into gold.',
+      title: "The Alchemist's Debt",
+      summary:
+        'Elias, a failing alchemist, accidentally creates a potion that turns shadows into gold.',
       tags: ['Fantasy', 'Moral', 'Magic'],
-      coverImage: 'https://images.unsplash.com/photo-1532187875460-1e0380bb9158?q=80&w=2670&auto=format&fit=crop',
-    }
+      coverImage:
+        'https://images.unsplash.com/photo-1532187875460-1e0380bb9158?q=80&w=2670&auto=format&fit=crop',
+    },
   ];
 
   const createdWorks: any[] = [];
@@ -59,7 +67,7 @@ async function bootstrap() {
         ...book,
         authorId: author._id,
         status: 'published',
-        childSafe: true
+        childSafe: true,
       });
       console.log(`Created book: ${work.title}`);
     } else {
@@ -78,14 +86,24 @@ async function bootstrap() {
     // Create a library for the user if not exists
     await libraryModel.findOneAndUpdate(
       { userId },
-      { $setOnInsert: { userId, currentlyReading: [], bookmarked: [], readLists: [] } },
-      { upsert: true }
+      {
+        $setOnInsert: {
+          userId,
+          currentlyReading: [],
+          bookmarked: [],
+          readLists: [],
+        },
+      },
+      { upsert: true },
     );
 
     // Give them a notification about the first book
     const firstWork = createdWorks[0];
-    const hasNotification = await notificationModel.exists({ userId, title: 'New Story Published!' });
-    
+    const hasNotification = await notificationModel.exists({
+      userId,
+      title: 'New Story Published!',
+    });
+
     if (!hasNotification) {
       await notificationModel.create({
         userId,
@@ -98,7 +116,7 @@ async function bootstrap() {
           authorImage: 'https://api.dicebear.com/7.x/avataaars/svg?seed=demo',
           bookTitle: firstWork.title,
           bookImage: firstWork.coverImage,
-        }
+        },
       });
       console.log(`Notification sent to ${user.username}`);
     }
@@ -106,7 +124,7 @@ async function bootstrap() {
     // Auto-bookmark the first book for them
     await libraryModel.updateOne(
       { userId },
-      { $addToSet: { bookmarked: firstWork._id } }
+      { $addToSet: { bookmarked: firstWork._id } },
     );
   }
 
