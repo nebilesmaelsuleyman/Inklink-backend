@@ -18,6 +18,9 @@ import { ProfileModule } from './modules/profile/profile.module';
 import { ReactionsModule } from './modules/reactions/reactions.module';
 import { RatingsModule } from './modules/ratings/ratings.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { WalletModule } from './modules/wallet/wallet.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
+import { PostsModule } from './modules/posts/posts.module';
 
 const optionalImports =
   process.env.DISABLE_DB === 'true'
@@ -31,6 +34,8 @@ const optionalImports =
         RatingsModule,
         YjsModule,
         AdminModule,
+        WalletModule,
+        SubscriptionModule,
       ];
 
 @Module({
@@ -48,6 +53,7 @@ const optionalImports =
     LibraryModule,
     NotificationsModule,
     ProfileModule,
+    PostsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
