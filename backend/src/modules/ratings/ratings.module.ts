@@ -7,7 +7,9 @@ import { WorksModule } from '../works/works.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: RATING_MODEL_NAME, schema: RatingSchema }]),
+    MongooseModule.forFeature([
+      { name: RATING_MODEL_NAME, schema: RatingSchema },
+    ]),
     WorksModule,
   ],
   controllers: [RatingsController],
