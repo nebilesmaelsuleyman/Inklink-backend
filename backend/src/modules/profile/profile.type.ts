@@ -1,4 +1,4 @@
-import { Types } from "mongoose";
+import { Types } from 'mongoose';
 
 export interface Profile {
   name: string;
@@ -14,4 +14,6 @@ export interface Profile {
 
   isCreator: boolean;
   isMonetized?: boolean;
+  interests: string[];
+  dismissedPosts: Types.ObjectId[];
 }
