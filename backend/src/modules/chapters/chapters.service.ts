@@ -20,6 +20,7 @@ import { CHAPTER_MODEL_NAME, ChapterDocument } from './schema/chapter.schema';
 import { ModerationService } from '../moderation/moderation.service';
 import { CollaborationService } from '../collaboration/collaboration.service';
 import { SubscriptionService } from '../subscription/subscription.service';
+import { TtsService } from '../tts/tts.service';
 
 @Injectable()
 export class ChaptersService {
@@ -37,6 +38,7 @@ export class ChaptersService {
     private readonly collaborationService: CollaborationService,
     @Inject(forwardRef(() => SubscriptionService))
     private readonly subscriptionService: SubscriptionService,
+    private readonly ttsService: TtsService,
   ) {}
 
   private toObjectId(id: string, field = 'id') {
@@ -110,7 +112,7 @@ export class ChaptersService {
 
   private async assertWorkOwner(workId: Types.ObjectId, requesterId: string) {
     const ownerId = this.toObjectId(requesterId, 'requesterId');
-    
+
     // Check Ownership
     const work = await this.workModel.findById(workId).lean().exec();
     if (!work) throw new NotFoundException('Work not found');
@@ -214,20 +216,20 @@ export class ChaptersService {
     return Promise.all(
       chapters.map(async (chapter) => {
         const mapped = this.mapChapter(chapter);
-        
+
         // If chapter is locked (price > 0), check access
         if ((chapter.price || 0) > 0) {
           const access = await this.subscriptionService.checkAccess(
             chapter._id.toString(),
             requesterId,
           );
-          
+
           if (!access.hasAccess) {
             // Strip content if no access
             mapped.contentText = '';
           }
         }
-        
+
         return mapped;
       }),
     );
