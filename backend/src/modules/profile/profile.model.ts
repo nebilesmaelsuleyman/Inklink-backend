@@ -18,6 +18,8 @@ export const ProfileSchema = new Schema<Profile>(
 
     isCreator: { type: Boolean, default: false },
     isMonetized: { type: Boolean, default: false },
+    interests: { type: [String], default: [] },
+    dismissedPosts: [{ type: Schema.Types.ObjectId, ref: 'AuthorPost' }],
   },
   { timestamps: true },
 );
