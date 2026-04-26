@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { CHAPTER_MODEL_NAME, ChapterSchema } from '../chapters/schema/chapter.schema';
+import {
+  CHAPTER_MODEL_NAME,
+  ChapterSchema,
+} from '../chapters/schema/chapter.schema';
 import { USER_MODEL_NAME, UserSchema } from '../users/user.schema';
 import { WORK_MODEL_NAME, WorkSchema } from '../works/schema/work.schema';
 import { REACTION_MODEL_NAME, ReactionSchema } from './schema/reaction.schema';
@@ -21,4 +24,3 @@ import { ReactionsService } from './reactions.service';
   exports: [ReactionsService],
 })
 export class ReactionsModule {}
-
