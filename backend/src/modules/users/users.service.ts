@@ -58,6 +58,19 @@ export class UsersService {
     return this.userModel.findOne({ email: email.toLowerCase() });
   }
 
+  async findByEmailOrUsername(query: string) {
+    if (!this.userModel || !query) {
+      return null;
+    }
+
+    return this.userModel.findOne({
+      $or: [
+        { email: query.toLowerCase() },
+        { username: query.toLowerCase() },
+      ],
+    });
+  }
+
   async update(id: string, updateUserDto: UpdateUserDto) {
     if (!this.userModel) {
       return null;
