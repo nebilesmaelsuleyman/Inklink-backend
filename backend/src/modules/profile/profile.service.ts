@@ -33,15 +33,34 @@ export class ProfileService {
         throw new NotFoundException('User not found, cannot create profile');
       }
 
-      profile = await this.profileModel.create({
-        _id: new Types.ObjectId(userId),
-        username: user.username,
-        name: user.username, // Default name to username
-        bio: 'Welcome to my profile!',
-        followers: [],
-        likes: 0,
-        isCreator: user.role === 'admin' || user.role === 'user',
-      });
+      try {
+        profile = await this.profileModel.create({
+          _id: new Types.ObjectId(userId),
+          username: user.username,
+          name: user.username, // Default name to username
+          bio: 'Welcome to my profile!',
+          followers: [],
+          likes: 0,
+          isCreator: user.role === 'admin' || user.role === 'user',
+        });
+      } catch (error: any) {
+        // If another request created the profile meanwhile, catch the duplicate key error and fetch it
+        if (error.code === 11000) {
+          profile = await this.profileModel
+            .findById(userId)
+            .populate('followers', 'username profilePicture')
+            .populate('readingList')
+            .populate('favoriteBook');
+
+          if (!profile) {
+            throw new Error(
+              'Failed to retrieve profile after duplicate key error',
+            );
+          }
+        } else {
+          throw error;
+        }
+      }
     }
 
     return {
@@ -52,11 +71,21 @@ export class ProfileService {
   }
 
   /**
-   * Updates basic profile information.
+   * Updates profile information and optionally user credentials.
    * @param userId ID of the user performing the update.
    * @param updates Object containing the fields to update.
    */
-  async updateProfile(userId: string, updates: Partial<Profile>) {
+  async updateProfile(userId: string, updates: any) {
+    // If username or password is provided, update the User model
+    if (updates.username || updates.password) {
+      const userUpdates: any = {};
+      if (updates.username) userUpdates.username = updates.username;
+      if (updates.password) userUpdates.password = updates.password;
+      
+      await this.usersService.update(userId, userUpdates);
+    }
+
+    // Update the profile model
     return await this.profileModel.findByIdAndUpdate(userId, updates, {
       returnDocument: 'after',
     });
@@ -68,16 +97,28 @@ export class ProfileService {
    * @param targetUserId ID of the user being followed.
    */
   async followUser(currentUserId: string, targetUserId: string) {
-
-    const user = await this.profileModel.findById(targetUserId);
+    // Ensure the target profile exists
+    const user = await this.getProfile(targetUserId);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException('User profile not found');
     }
 
-    if (!user.followers.includes(currentUserId as any)) {
-      user.followers.push(currentUserId as any);
-      await user.save();
+    // Initialize followers if missing
+    if (!user.followers) {
+      user.followers = [];
+    }
+
+    const isAlreadyFollowing = user.followers.some(
+      (f: any) => f.toString() === currentUserId,
+    );
+
+    if (!isAlreadyFollowing) {
+      user.followers.push(new Types.ObjectId(currentUserId) as any);
+      await this.profileModel.updateOne(
+        { _id: new Types.ObjectId(targetUserId) },
+        { $push: { followers: new Types.ObjectId(currentUserId) } },
+      );
     }
 
     return user;
