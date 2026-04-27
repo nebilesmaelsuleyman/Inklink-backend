@@ -17,6 +17,7 @@ import { LibraryModule } from './modules/library/library.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProfileModule } from './modules/profile/profile.module';
 import { ReactionsModule } from './modules/reactions/reactions.module';
+import { RatingsModule } from './modules/ratings/ratings.module';
 
 
 loadEnv({ path: '.env' });
@@ -30,6 +31,7 @@ const optionalImports =
         WorksModule,
         ChaptersModule,
         ReactionsModule,
+        RatingsModule,
         YjsModule,
       ];
 
