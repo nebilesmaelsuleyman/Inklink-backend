@@ -6,10 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ObjectIdLike } from 'bson';
 import { ChatRoomKind, ChatRoomType } from './schema/chat-room.schema';
 import { ChatMembership, ChatMemberRole } from './schema/membership.schema';
 import { ChatMessage } from './schema/message.schema';
+
+type ObjectIdLike = Types.ObjectId | string | { toString(): string };
 
 @Injectable()
 export class ChatService {

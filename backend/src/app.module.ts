@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { config as loadEnv } from 'dotenv';
 import configuration from './config/configuration';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -18,9 +17,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ProfileModule } from './modules/profile/profile.module';
 import { ReactionsModule } from './modules/reactions/reactions.module';
 import { RatingsModule } from './modules/ratings/ratings.module';
-
-
-loadEnv({ path: '.env' });
+import { AdminModule } from './modules/admin/admin.module';
 
 const optionalImports =
   process.env.DISABLE_DB === 'true'
@@ -33,13 +30,14 @@ const optionalImports =
         ReactionsModule,
         RatingsModule,
         YjsModule,
+        AdminModule,
       ];
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ['.env', '../.env'],
       load: [configuration],
     }),
     ...optionalImports,

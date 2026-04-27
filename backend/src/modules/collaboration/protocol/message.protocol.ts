@@ -1,7 +1,3 @@
-// protocol/message.protocol.ts
-import * as encoding from 'lib0/encoding';
-import * as decoding from 'lib0/decoding';
-
 export enum MessageType {
   Sync = 0,
   Awareness = 1,
@@ -9,22 +5,39 @@ export enum MessageType {
 
 export class MessageProtocol {
   static encode(type: MessageType, payload: Uint8Array): Uint8Array {
-    const encoder = encoding.createEncoder();
+    const body = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
+    const length = body.byteLength;
+    const message = new Uint8Array(1 + 4 + length);
+    const view = new DataView(message.buffer);
 
-    encoding.writeUint8(encoder, type);
-    encoding.writeVarUint8Array(encoder, payload);
+    message[0] = type;
+    view.setUint32(1, length, false);
+    message.set(body, 5);
 
-    return encoding.toUint8Array(encoder);
+    return message;
   }
 
   static decode(message: Uint8Array): {
     type: MessageType;
     payload: Uint8Array;
   } {
-    const decoder = decoding.createDecoder(message);
+    if (!(message instanceof Uint8Array) || message.byteLength < 5) {
+      throw new Error('Invalid message');
+    }
 
-    const type = decoding.readUint8(decoder);
-    const payload = decoding.readVarUint8Array(decoder);
+    const view = new DataView(
+      message.buffer,
+      message.byteOffset,
+      message.byteLength,
+    );
+    const type = view.getUint8(0) as MessageType;
+    const payloadLength = view.getUint32(1, false);
+
+    if (message.byteLength !== 5 + payloadLength) {
+      throw new Error('Invalid payload length');
+    }
+
+    const payload = message.slice(5);
 
     return { type, payload };
   }
