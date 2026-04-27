@@ -3,6 +3,8 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -16,6 +18,8 @@ import { ReorderChaptersDto } from './dto/reorder-chapters.dto';
 import { UpdateChapterDto } from './dto/update-chapter.dto';
 import { CHAPTER_MODEL_NAME, ChapterDocument } from './schema/chapter.schema';
 import { ModerationService } from '../moderation/moderation.service';
+import { CollaborationService } from '../collaboration/collaboration.service';
+import { SubscriptionService } from '../subscription/subscription.service';
 
 @Injectable()
 export class ChaptersService {
@@ -29,6 +33,10 @@ export class ChaptersService {
     private readonly moderationService: ModerationService,
     private readonly libraryService: LibraryService,
     private readonly notificationsService: NotificationsService,
+    @Inject(forwardRef(() => CollaborationService))
+    private readonly collaborationService: CollaborationService,
+    @Inject(forwardRef(() => SubscriptionService))
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   private toObjectId(id: string, field = 'id') {
@@ -36,6 +44,11 @@ export class ChaptersService {
       throw new BadRequestException(`Invalid ${field}`);
     }
     return new Types.ObjectId(id);
+  }
+
+  async findOneById(id: string) {
+    const chapterId = this.toObjectId(id);
+    return this.chapterModel.findById(chapterId).exec();
   }
 
   private mapChapter(chapter: any) {
@@ -51,6 +64,7 @@ export class ChaptersService {
       childSafe: chapter.childSafe,
       adultSafe: chapter.adultSafe,
       moderationUpdatedAt: chapter.moderationUpdatedAt,
+      price: chapter.price,
       createdAt: chapter.createdAt,
       updatedAt: chapter.updatedAt,
     };
@@ -73,11 +87,15 @@ export class ChaptersService {
         moderationUpdatedAt: new Date(),
       };
     } catch (err) {
-      console.warn('Moderation service failed, falling back to admin review', err);
+      console.warn(
+        'Moderation service failed, falling back to admin review',
+        err,
+      );
       return {
         moderationStatus: 'needs_admin_review',
         moderationConfidence: 0,
-        moderationReason: 'Moderation service unavailable. Manual review required.',
+        moderationReason:
+          'Moderation service unavailable. Manual review required.',
         childSafe: false,
         adultSafe: false,
         moderationUpdatedAt: new Date(),
@@ -92,12 +110,24 @@ export class ChaptersService {
 
   private async assertWorkOwner(workId: Types.ObjectId, requesterId: string) {
     const ownerId = this.toObjectId(requesterId, 'requesterId');
-    const owned = await this.workModel.exists({
-      _id: workId,
-      authorId: ownerId,
-    });
-    if (!owned)
+    
+    // Check Ownership
+    const work = await this.workModel.findById(workId).lean().exec();
+    if (!work) throw new NotFoundException('Work not found');
+
+    if (work.authorId.toString() === requesterId) {
+      return; // Is owner
+    }
+
+    // Check Collaboration
+    const isCollab = await this.collaborationService.isCollaborator(
+      workId.toString(),
+      requesterId,
+    );
+
+    if (!isCollab) {
       throw new ForbiddenException('You do not have access to this work');
+    }
   }
 
   private async assertChapterOwner(
@@ -172,7 +202,7 @@ export class ChaptersService {
   }
 
   /** Public listing for published works — no ownership check. */
-  async listPublicByWork(workId: string) {
+  async listPublicByWork(workId: string, requesterId?: string) {
     const parsedWorkId = this.toObjectId(workId, 'workId');
 
     const chapters = await this.chapterModel
@@ -181,7 +211,26 @@ export class ChaptersService {
       .lean()
       .exec();
 
-    return chapters.map((chapter) => this.mapChapter(chapter));
+    return Promise.all(
+      chapters.map(async (chapter) => {
+        const mapped = this.mapChapter(chapter);
+        
+        // If chapter is locked (price > 0), check access
+        if ((chapter.price || 0) > 0) {
+          const access = await this.subscriptionService.checkAccess(
+            chapter._id.toString(),
+            requesterId,
+          );
+          
+          if (!access.hasAccess) {
+            // Strip content if no access
+            mapped.contentText = '';
+          }
+        }
+        
+        return mapped;
+      }),
+    );
   }
 
   async create(
@@ -211,6 +260,7 @@ export class ChaptersService {
       title,
       orderIndex,
       contentText: createChapterDto.contentText || '',
+      price: createChapterDto.price || 0,
       ...(await this.evaluateAndBuildModerationFields(
         [title, createChapterDto.contentText || ''].join('\n\n'),
       )),
@@ -242,6 +292,10 @@ export class ChaptersService {
       updatePayload.contentText = updateChapterDto.contentText;
     }
 
+    if (typeof updateChapterDto.price === 'number') {
+      updatePayload.price = updateChapterDto.price;
+    }
+
     if (
       typeof updateChapterDto.title === 'string' ||
       typeof updateChapterDto.contentText === 'string'
@@ -267,7 +321,11 @@ export class ChaptersService {
     }
 
     const updated = await this.chapterModel
-      .findByIdAndUpdate(chapterId, { $set: updatePayload }, { returnDocument: 'after' })
+      .findByIdAndUpdate(
+        chapterId,
+        { $set: updatePayload },
+        { returnDocument: 'after' },
+      )
       .lean()
       .exec();
 
