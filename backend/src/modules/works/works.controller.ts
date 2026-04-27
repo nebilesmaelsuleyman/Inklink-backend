@@ -80,6 +80,15 @@ export class WorksController {
   }
 
   @UseGuards(OptionalJwtAuthGuard)
+  @Get('search')
+  @ApiOperation({ summary: 'Search published works by title or author' })
+  @ApiQuery({ name: 'q', required: true })
+  search(@Req() request: any, @Query('q') query: string) {
+    const user = request.user;
+    return this.worksService.search(query, user?.role);
+  }
+
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id')
   @ApiOperation({ summary: 'Get one work with chapters' })
   @ApiParam({ name: 'id', description: 'Work id' })
