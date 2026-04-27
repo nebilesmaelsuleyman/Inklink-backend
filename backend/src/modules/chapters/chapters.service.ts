@@ -267,7 +267,7 @@ export class ChaptersService {
     }
 
     const updated = await this.chapterModel
-      .findByIdAndUpdate(chapterId, { $set: updatePayload }, { new: true })
+      .findByIdAndUpdate(chapterId, { $set: updatePayload }, { returnDocument: 'after' })
       .lean()
       .exec();
 
