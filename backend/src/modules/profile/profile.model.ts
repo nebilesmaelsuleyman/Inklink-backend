@@ -17,6 +17,7 @@ export const ProfileSchema = new Schema<Profile>(
     favoriteBook: { type: Schema.Types.ObjectId, ref: 'Work' },
 
     isCreator: { type: Boolean, default: false },
+    isMonetized: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

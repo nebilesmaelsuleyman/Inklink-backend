@@ -13,4 +13,5 @@ export interface Profile {
   favoriteBook?: Types.ObjectId;
 
   isCreator: boolean;
+  isMonetized?: boolean;
 }

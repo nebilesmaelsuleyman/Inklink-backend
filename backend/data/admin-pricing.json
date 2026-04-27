@@ -1,0 +1,25 @@
+{
+  "plans": [
+    {
+      "id": "weekly",
+      "name": "Weekly",
+      "price": 50,
+      "currency": "ETB",
+      "period": "per week"
+    },
+    {
+      "id": "monthly",
+      "name": "Monthly",
+      "price": 150,
+      "currency": "ETB",
+      "period": "per month"
+    },
+    {
+      "id": "yearly",
+      "name": "Yearly",
+      "price": 1500,
+      "currency": "ETB",
+      "period": "per year"
+    }
+  ]
+}
