@@ -64,10 +64,7 @@ export class UsersService {
     }
 
     return this.userModel.findOne({
-      $or: [
-        { email: query.toLowerCase() },
-        { username: query.toLowerCase() },
-      ],
+      $or: [{ email: query.toLowerCase() }, { username: query.toLowerCase() }],
     });
   }
 

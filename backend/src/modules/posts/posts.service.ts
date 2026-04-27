@@ -26,13 +26,19 @@ export class PostsService {
 
     // Notify followers
     const authorProfile = await this.profileModel.findById(authorId);
-    if (authorProfile && authorProfile.followers && authorProfile.followers.length > 0) {
+    if (
+      authorProfile &&
+      authorProfile.followers &&
+      authorProfile.followers.length > 0
+    ) {
       const notificationPromises = authorProfile.followers.map((followerId) =>
         this.notificationsService.createNotification({
           userId: followerId,
           type: NotificationType.ANNOUNCEMENT,
           title: `New post from ${authorProfile.username}`,
-          description: createPostDto.content.substring(0, 100) + (createPostDto.content.length > 100 ? '...' : ''),
+          description:
+            createPostDto.content.substring(0, 100) +
+            (createPostDto.content.length > 100 ? '...' : ''),
           metadata: {
             authorName: authorProfile.username,
             authorImage: authorProfile.profilePicture,
@@ -67,9 +73,9 @@ export class PostsService {
 
     // 3. Get posts from these authors, excluding dismissed ones
     return this.postModel
-      .find({ 
+      .find({
         authorId: { $in: followedAuthorIds },
-        _id: { $nin: dismissedPosts }
+        _id: { $nin: dismissedPosts },
       })
       .populate('authorId', 'username profilePicture')
       .sort({ createdAt: -1 })
@@ -79,7 +85,7 @@ export class PostsService {
 
   async dismissPost(userId: string, postId: string) {
     await this.profileModel.findByIdAndUpdate(userId, {
-      $addToSet: { dismissedPosts: new Types.ObjectId(postId) }
+      $addToSet: { dismissedPosts: new Types.ObjectId(postId) },
     });
     return { success: true };
   }
@@ -97,17 +103,19 @@ export class PostsService {
 
       // Notify the author
       const liker = await this.profileModel.findById(userId);
-      this.notificationsService.createNotification({
-        userId: post.authorId,
-        type: NotificationType.ANNOUNCEMENT,
-        title: `Your post was liked!`,
-        description: `${liker?.username || 'Someone'} liked your post: "${post.content.substring(0, 30)}..."`,
-        metadata: {
-          authorName: liker?.username,
-          authorImage: liker?.profilePicture,
-          referenceId: post._id.toString(),
-        }
-      } as any).catch(err => console.error('Failed to notify author of like:', err));
+      this.notificationsService
+        .createNotification({
+          userId: post.authorId,
+          type: NotificationType.ANNOUNCEMENT,
+          title: `Your post was liked!`,
+          description: `${liker?.username || 'Someone'} liked your post: "${post.content.substring(0, 30)}..."`,
+          metadata: {
+            authorName: liker?.username,
+            authorImage: liker?.profilePicture,
+            referenceId: post._id.toString(),
+          },
+        } as any)
+        .catch((err) => console.error('Failed to notify author of like:', err));
     } else {
       post.likes.splice(index, 1);
       post.likesCount -= 1;
