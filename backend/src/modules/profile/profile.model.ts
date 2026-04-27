@@ -13,8 +13,8 @@ export const ProfileSchema = new Schema<Profile>(
     followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     likes: { type: Number, default: 0 },
 
-    readingList: [{ type: Schema.Types.ObjectId, ref: 'Book' }],
-    favoriteBook: { type: Schema.Types.ObjectId, ref: 'Book' },
+    readingList: [{ type: Schema.Types.ObjectId, ref: 'Work' }],
+    favoriteBook: { type: Schema.Types.ObjectId, ref: 'Work' },
 
     isCreator: { type: Boolean, default: false },
   },

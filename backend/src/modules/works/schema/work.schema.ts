@@ -39,6 +39,8 @@ export interface WorkDocument extends Document {
   moderationReason?: string;
   childSafe?: boolean;
   adultSafe?: boolean;
+  averageRating?: number;
+  ratingsCount?: number;
   reviewedBy?: Types.ObjectId;
   reviewedAt?: Date;
   moderationUpdatedAt?: Date;
@@ -58,6 +60,8 @@ export const WorkSchema = new Schema<WorkDocument>(
     summary: { type: String, default: '', trim: true },
     coverImage: { type: String, required: false },
     tags: { type: [String], default: [] },
+    averageRating: { type: Number, default: 0 },
+    ratingsCount: { type: Number, default: 0 },
     status: {
       type: String,
       enum: [

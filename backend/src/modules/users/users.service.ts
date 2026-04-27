@@ -70,7 +70,7 @@ export class UsersService {
     }
 
     return this.userModel
-      .findByIdAndUpdate(id, payload, { new: true })
+      .findByIdAndUpdate(id, payload, { returnDocument: 'after' })
       .select('-password')
       .lean();
   }

@@ -81,7 +81,7 @@ export class WorkAggregationService {
     if (Object.keys($unset).length > 0) update.$unset = $unset;
 
     const updated = await this.workModel
-      .findByIdAndUpdate(workId, update, { new: true })
+      .findByIdAndUpdate(workId, update, { returnDocument: 'after' })
       .lean()
       .exec();
 

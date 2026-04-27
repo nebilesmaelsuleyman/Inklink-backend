@@ -59,24 +59,38 @@ export class WorksService {
   }
 
   private async evaluateAndBuildModerationFields(text: string) {
-    const result = await this.moderationService.moderateText(text);
-    const status =
-      result.decision === 'approved'
-        ? 'approved'
-        : result.decision === 'rejected'
-          ? 'rejected'
-          : 'needs_admin_review';
+    try {
+      const result = await this.moderationService.moderateText(text);
+      const status =
+        result.decision === 'approved'
+          ? 'approved'
+          : result.decision === 'rejected'
+            ? 'rejected'
+            : 'needs_admin_review';
 
-    return {
-      status,
-      moderationConfidence: result.confidence,
-      moderationReason: result.reason,
-      childSafe: result.childSafe,
-      adultSafe: result.adultSafe,
-      moderationUpdatedAt: new Date(),
-      reviewedBy: undefined,
-      reviewedAt: undefined,
-    };
+      return {
+        status,
+        moderationConfidence: result.confidence,
+        moderationReason: result.reason,
+        childSafe: result.childSafe,
+        adultSafe: result.adultSafe,
+        moderationUpdatedAt: new Date(),
+        reviewedBy: undefined,
+        reviewedAt: undefined,
+      };
+    } catch (err) {
+      console.warn('Moderation service failed, falling back to admin review', err);
+      return {
+        status: 'needs_admin_review',
+        moderationConfidence: 0,
+        moderationReason: 'Moderation service unavailable. Manual review required.',
+        childSafe: false,
+        adultSafe: false,
+        moderationUpdatedAt: new Date(),
+        reviewedBy: undefined,
+        reviewedAt: undefined,
+      };
+    }
   }
 
   private async assertWorkOwner(workId: Types.ObjectId, requesterId: string) {
@@ -271,7 +285,7 @@ export class WorksService {
     }
 
     const updated = await this.workModel
-      .findByIdAndUpdate(workId, { $set: updatePayload }, { new: true })
+      .findByIdAndUpdate(workId, { $set: updatePayload }, { returnDocument: 'after' })
       .lean()
       .exec();
     if (!updated) throw new NotFoundException('Work not found');
@@ -285,9 +299,12 @@ export class WorksService {
 
     const existing = await this.workModel.findById(workId).lean().exec();
     if (!existing) throw new NotFoundException('Work not found');
-    if (existing.status !== 'approved') {
+    
+    // Works are metadata, so we allow publishing even if they are in 'needs_admin_review'
+    // Chapters will be strictly moderated.
+    if (existing.status === 'rejected') {
       throw new BadRequestException(
-        'Work can be published only after moderation approval',
+        'This work has been rejected by moderation and cannot be published.',
       );
     }
 
@@ -295,7 +312,7 @@ export class WorksService {
       .findByIdAndUpdate(
         workId,
         { $set: { status: 'published' } },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .lean()
       .exec();
@@ -330,7 +347,7 @@ export class WorksService {
             moderationUpdatedAt: new Date(),
           },
         },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .lean()
       .exec();
@@ -354,7 +371,7 @@ export class WorksService {
             moderationUpdatedAt: new Date(),
           },
         },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .lean()
       .exec();
