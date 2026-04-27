@@ -58,6 +58,25 @@ export class WorksService {
     };
   }
 
+  private async getAuthorUsernameMap(authorIds: Types.ObjectId[]) {
+    if (authorIds.length === 0) return new Map<string, string>();
+
+    const uniqueAuthorIds = Array.from(
+      new Set(authorIds.map((id) => id.toString())),
+    ).map((id) => new Types.ObjectId(id));
+
+    const authors = await this.workModel.db
+      .model('User')
+      .find({ _id: { $in: uniqueAuthorIds } })
+      .select('username')
+      .lean()
+      .exec();
+
+    return new Map<string, string>(
+      authors.map((author: any) => [author._id.toString(), author.username || '']),
+    );
+  }
+
   private async evaluateAndBuildModerationFields(text: string) {
     try {
       const result = await this.moderationService.moderateText(text);
@@ -321,14 +340,48 @@ export class WorksService {
     return this.mapWork(updated);
   }
 
-  async listReviewQueue() {
+  async listReviewQueue(status?: string) {
+    const query: any = {};
+
+    if (status === 'needs_admin_review') {
+      query.status = 'needs_admin_review';
+    } else if (status === 'rejected') {
+      query.status = 'rejected';
+    } else {
+      query.status = { $in: ['needs_admin_review', 'rejected'] };
+    }
+
     const queue = await this.workModel
-      .find({ status: 'needs_admin_review' })
+      .find(query)
       .sort({ moderationUpdatedAt: -1, updatedAt: -1 })
       .lean()
       .exec();
 
-    return queue.map((work) => this.mapWork(work));
+    const authorMap = await this.getAuthorUsernameMap(
+      queue.map((work) => work.authorId),
+    );
+
+    return queue.map((work) => ({
+      ...this.mapWork(work),
+      authorUsername: authorMap.get(work.authorId.toString()) || undefined,
+    }));
+  }
+
+  async getAdminDetails(id: string) {
+    const workId = this.toObjectId(id);
+    const work = await this.workModel.findById(workId).lean().exec();
+    if (!work) throw new NotFoundException('Work not found');
+
+    const [authorMap, chapters] = await Promise.all([
+      this.getAuthorUsernameMap([work.authorId]),
+      this.chaptersService.listPublicByWork(id),
+    ]);
+
+    return {
+      ...this.mapWork(work),
+      authorUsername: authorMap.get(work.authorId.toString()) || undefined,
+      chapters,
+    };
   }
 
   async adminApprove(id: string, adminId: string) {
@@ -372,6 +425,31 @@ export class WorksService {
           },
         },
         { returnDocument: 'after' },
+      )
+      .lean()
+      .exec();
+
+    if (!updated) throw new NotFoundException('Work not found');
+    return this.mapWork(updated);
+  }
+
+  async adminFlag(id: string, adminId: string) {
+    const workId = this.toObjectId(id);
+    const reviewerId = this.toObjectId(adminId, 'adminId');
+
+    const updated = await this.workModel
+      .findByIdAndUpdate(
+        workId,
+        {
+          $set: {
+            status: 'needs_admin_review',
+            moderationReason: 'flagged_by_admin',
+            reviewedBy: reviewerId,
+            reviewedAt: new Date(),
+            moderationUpdatedAt: new Date(),
+          },
+        },
+        { new: true },
       )
       .lean()
       .exec();

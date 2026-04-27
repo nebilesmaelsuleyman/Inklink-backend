@@ -114,14 +114,21 @@ export class WorksController {
   }
 
   @Get('admin/moderation/review-queue')
-  @UseGuards(AdminRoleGuard)
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   @ApiOperation({ summary: 'List works awaiting admin moderation review' })
-  reviewQueue() {
-    return this.worksService.listReviewQueue();
+  reviewQueue(@Query('status') status?: string) {
+    return this.worksService.listReviewQueue(status);
+  }
+
+  @Get('admin/:id')
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  @ApiOperation({ summary: 'Get admin moderation details for one work' })
+  getAdminDetails(@Param('id') id: string) {
+    return this.worksService.getAdminDetails(id);
   }
 
   @Post('admin/:id/moderation/approve')
-  @UseGuards(AdminRoleGuard)
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   @ApiOperation({ summary: 'Approve a work in admin moderation review' })
   approveByAdmin(
     @Param('id') id: string,
@@ -131,10 +138,17 @@ export class WorksController {
   }
 
   @Post('admin/:id/moderation/reject')
-  @UseGuards(AdminRoleGuard)
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
   @ApiOperation({ summary: 'Reject a work in admin moderation review' })
   rejectByAdmin(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
     return this.worksService.adminReject(id, request.user.sub);
+  }
+
+  @Post('admin/:id/moderation/flag')
+  @UseGuards(JwtAuthGuard, AdminRoleGuard)
+  @ApiOperation({ summary: 'Flag a work for admin moderation review' })
+  flagByAdmin(@Param('id') id: string, @Req() request: AuthenticatedRequest) {
+    return this.worksService.adminFlag(id, request.user.sub);
   }
 
   @Delete(':id')
