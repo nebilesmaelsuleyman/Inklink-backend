@@ -22,6 +22,7 @@ export interface ChapterDocument extends Document {
   childSafe?: boolean;
   adultSafe?: boolean;
   moderationUpdatedAt?: Date;
+  price: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +58,7 @@ export const ChapterSchema = new Schema<ChapterDocument>(
     childSafe: { type: Boolean, required: false },
     adultSafe: { type: Boolean, required: false },
     moderationUpdatedAt: { type: Date, required: false },
+    price: { type: Number, default: 0 },
   },
   { timestamps: true },
 );
