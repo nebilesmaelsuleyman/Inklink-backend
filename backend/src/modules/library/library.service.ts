@@ -46,15 +46,16 @@ export class LibraryService {
     }
 
     const workObjectId = new Types.ObjectId(workId);
-    const existingIndex = library.currentlyReading.findIndex(
-      (cr) => cr.workId.toString() === workId,
+    
+    // Filter out if already exists to move it to the front
+    const updatedList = library.currentlyReading.filter(
+      (cr) => cr.workId.toString() !== workId,
     );
 
-    if (existingIndex > -1) {
-      library.currentlyReading[existingIndex].progress = progress;
-    } else {
-      library.currentlyReading.push({ workId: workObjectId, progress });
-    }
+    // Add to the front
+    updatedList.unshift({ workId: workObjectId, progress });
+
+    library.currentlyReading = updatedList as any;
 
     await library.save();
     return this.getLibrary(userId);
