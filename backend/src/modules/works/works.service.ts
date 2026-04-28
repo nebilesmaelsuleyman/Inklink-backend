@@ -3,15 +3,21 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ChaptersService } from '../chapters/chapters.service';
 import { ModerationService } from '../moderation/moderation.service';
 import { ReactionsService } from '../reactions/reactions.service';
+import { CollaborationService } from '../collaboration/collaboration.service';
 import { CreateWorkDto } from './dto/create-work.dto';
 import { UpdateWorkDto } from './dto/update-work.dto';
 import { WORK_MODEL_NAME, WorkDocument } from './schema/work.schema';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/schemas/notification.schema';
+import { Profile } from '../profile/profile.type';
 
 @Injectable()
 export class WorksService {
@@ -21,7 +27,17 @@ export class WorksService {
     private readonly chaptersService: ChaptersService,
     private readonly reactionsService: ReactionsService,
     private readonly moderationService: ModerationService,
+    @Inject(forwardRef(() => CollaborationService))
+    private readonly collaborationService: CollaborationService,
+    private readonly notificationsService: NotificationsService,
+    @InjectModel('Profile')
+    private readonly profileModel: Model<Profile>,
   ) {}
+
+  async findOneById(id: string) {
+    const workId = this.toObjectId(id);
+    return this.workModel.findById(workId).exec();
+  }
 
   private toObjectId(id: string, field = 'id') {
     if (!Types.ObjectId.isValid(id)) {
@@ -53,6 +69,8 @@ export class WorksService {
       reviewedBy: work.reviewedBy ? work.reviewedBy.toString() : undefined,
       reviewedAt: work.reviewedAt,
       moderationUpdatedAt: work.moderationUpdatedAt,
+      averageRating: work.averageRating || 0,
+      ratingsCount: work.ratingsCount || 0,
       createdAt: work.createdAt,
       updatedAt: work.updatedAt,
     };
@@ -98,11 +116,15 @@ export class WorksService {
         reviewedAt: undefined,
       };
     } catch (err) {
-      console.warn('Moderation service failed, falling back to admin review', err);
+      console.warn(
+        'Moderation service failed, falling back to admin review',
+        err,
+      );
       return {
         status: 'needs_admin_review',
         moderationConfidence: 0,
-        moderationReason: 'Moderation service unavailable. Manual review required.',
+        moderationReason:
+          'Moderation service unavailable. Manual review required.',
         childSafe: false,
         adultSafe: false,
         moderationUpdatedAt: new Date(),
@@ -163,7 +185,21 @@ export class WorksService {
       .lean()
       .exec();
 
-    return works.map((work) => this.mapWork(work));
+    const mapped = works.map((work) => this.mapWork(work));
+
+    // Enrich with aggregated reaction counts from chapters
+    const workIds = mapped.map((w) => w.id);
+    const reactionSummaries =
+      await this.reactionsService.getWorkReactionSummaries(workIds);
+
+    return mapped.map((work) => {
+      const summary = reactionSummaries.get(work.id) || {
+        likesCount: 0,
+        commentsCount: 0,
+        viewsCount: 0,
+      };
+      return { ...work, ...summary };
+    });
   }
 
   async browse(requesterId?: string, role?: string, tag?: string) {
@@ -182,7 +218,55 @@ export class WorksService {
       .lean()
       .exec();
 
-    return works.map((work) => this.mapWork(work));
+    const mapped = works.map((work) => this.mapWork(work));
+
+    // Enrich with aggregated reaction counts from chapters
+    const workIds = mapped.map((w) => w.id);
+    const reactionSummaries =
+      await this.reactionsService.getWorkReactionSummaries(workIds);
+
+    return mapped.map((work) => {
+      const summary = reactionSummaries.get(work.id) || {
+        likesCount: 0,
+        commentsCount: 0,
+        viewsCount: 0,
+      };
+      return { ...work, ...summary };
+    });
+  }
+
+  async search(query: string, role?: string) {
+    const searchRegex = new RegExp(query, 'i');
+
+    const works = await this.workModel.aggregate([
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'authorId',
+          foreignField: '_id',
+          as: 'author',
+        },
+      },
+      { $unwind: '$author' },
+      {
+        $match: {
+          status: 'published',
+          ...(role === 'child' ? { childSafe: true } : {}),
+          $or: [
+            { title: searchRegex },
+            { 'author.username': searchRegex },
+            { tags: { $in: [searchRegex] } },
+          ],
+        },
+      },
+      { $sort: { averageRating: -1, updatedAt: -1 } },
+      { $limit: 20 },
+    ]);
+
+    return works.map((work) => ({
+      ...this.mapWork(work),
+      authorUsername: work.author.username,
+    }));
   }
 
   async getById(id: string, requesterId?: string, role?: string) {
@@ -191,10 +275,9 @@ export class WorksService {
     // Populate author username in a single query
     const work = await this.workModel
       .findById(workId)
-      .populate<{ authorId: { _id: Types.ObjectId; username: string } }>(
-        'authorId',
-        'username',
-      )
+      .populate<{
+        authorId: { _id: Types.ObjectId; username: string };
+      }>('authorId', 'username')
       .lean()
       .exec();
     if (!work) throw new NotFoundException('Work not found');
@@ -212,13 +295,16 @@ export class WorksService {
       );
     }
 
-    // Non-published works are only visible to their owner
+    // Non-published works are only visible to their owner or collaborators
     if (work.status !== 'published') {
       if (!requesterId) {
         throw new ForbiddenException('Authentication required');
       }
-      const ownerId = this.toObjectId(requesterId, 'requesterId');
-      if (authorIdStr !== ownerId.toString()) {
+      
+      const isOwner = authorIdStr === requesterId;
+      const isCollab = await this.collaborationService.isCollaborator(id, requesterId);
+
+      if (!isOwner && !isCollab) {
         throw new ForbiddenException('You do not have access to this work');
       }
     }
@@ -227,15 +313,14 @@ export class WorksService {
     // fall back to owner-only listing for drafts etc.
     const chapters =
       work.status === 'published'
-        ? await this.chaptersService.listPublicByWork(id)
+        ? await this.chaptersService.listPublicByWork(id, requesterId)
         : await this.chaptersService.listByWork(id, requesterId!);
 
-    const reactionSummaries = await this.reactionsService.getSummariesForChapters(
-      {
+    const reactionSummaries =
+      await this.reactionsService.getSummariesForChapters({
         chapterIds: chapters.map((c: any) => c.id || c._id).filter(Boolean),
         requesterId,
-      },
-    );
+      });
 
     const chaptersWithReactions = chapters.map((chapter: any) => {
       const key = (chapter.id || chapter._id || '').toString();
@@ -304,7 +389,11 @@ export class WorksService {
     }
 
     const updated = await this.workModel
-      .findByIdAndUpdate(workId, { $set: updatePayload }, { returnDocument: 'after' })
+      .findByIdAndUpdate(
+        workId,
+        { $set: updatePayload },
+        { returnDocument: 'after' },
+      )
       .lean()
       .exec();
     if (!updated) throw new NotFoundException('Work not found');
@@ -318,7 +407,7 @@ export class WorksService {
 
     const existing = await this.workModel.findById(workId).lean().exec();
     if (!existing) throw new NotFoundException('Work not found');
-    
+
     // Works are metadata, so we allow publishing even if they are in 'needs_admin_review'
     // Chapters will be strictly moderated.
     if (existing.status === 'rejected') {
@@ -337,6 +426,32 @@ export class WorksService {
       .exec();
 
     if (!updated) throw new NotFoundException('Work not found');
+
+    // Notify followers
+    try {
+      const authorProfile = await this.profileModel.findById(updated.authorId);
+      if (authorProfile && authorProfile.followers && authorProfile.followers.length > 0) {
+        const notificationPromises = authorProfile.followers.map((followerId) =>
+          this.notificationsService.createNotification({
+            userId: followerId,
+            type: NotificationType.ANNOUNCEMENT,
+            title: `New Book: ${updated.title}`,
+            description: `${authorProfile.username} just published a new book: ${updated.summary.substring(0, 100)}${updated.summary.length > 100 ? '...' : ''}`,
+            metadata: {
+              authorName: authorProfile.username,
+              authorImage: authorProfile.profilePicture,
+              bookTitle: updated.title,
+              bookImage: updated.coverImage,
+              referenceId: updated._id.toString(),
+            },
+          } as any),
+        );
+        await Promise.all(notificationPromises);
+      }
+    } catch (err) {
+      console.error('Failed to notify followers about book publication:', err);
+    }
+
     return this.mapWork(updated);
   }
 
