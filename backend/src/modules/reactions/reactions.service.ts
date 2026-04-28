@@ -300,7 +300,11 @@ export class ReactionsService {
     if (chapters.length === 0) {
       const empty = new Map<string, any>();
       workObjectIds.forEach((oid) =>
-        empty.set(oid.toString(), { likesCount: 0, commentsCount: 0, viewsCount: 0 }),
+        empty.set(oid.toString(), {
+          likesCount: 0,
+          commentsCount: 0,
+          viewsCount: 0,
+        }),
       );
       return empty;
     }
@@ -345,7 +349,11 @@ export class ReactionsService {
       { likesCount: number; commentsCount: number; viewsCount: number }
     >();
     workObjectIds.forEach((oid) =>
-      byWorkId.set(oid.toString(), { likesCount: 0, commentsCount: 0, viewsCount: 0 }),
+      byWorkId.set(oid.toString(), {
+        likesCount: 0,
+        commentsCount: 0,
+        viewsCount: 0,
+      }),
     );
 
     counts.forEach((row: any) => {
