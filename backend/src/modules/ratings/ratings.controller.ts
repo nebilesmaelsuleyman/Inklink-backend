@@ -1,5 +1,19 @@
-import { Controller, Post, Body, Param, Get, Query, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Post,
+  Body,
+  Param,
+  Get,
+  Query,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { RatingsService } from './ratings.service';
 import { CreateRatingDto } from './dto/create-rating.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -19,7 +33,11 @@ export class RatingsController {
     @Body() createRatingDto: CreateRatingDto,
     @Request() req,
   ) {
-    return this.ratingsService.rateWork(workId, req.user.id, createRatingDto.value);
+    return this.ratingsService.rateWork(
+      workId,
+      req.user.id,
+      createRatingDto.value,
+    );
   }
 
   @Get('work/:workId')
