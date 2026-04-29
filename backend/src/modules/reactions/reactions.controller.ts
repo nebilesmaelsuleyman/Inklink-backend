@@ -70,10 +70,15 @@ export class ReactionsController {
     @Query('cursor') cursor?: string,
   ) {
     const user = request.user || undefined;
-    return this.reactionsService.listComments(chapterId, user?.sub, user?.role, {
-      limit,
-      cursor,
-    });
+    return this.reactionsService.listComments(
+      chapterId,
+      user?.sub,
+      user?.role,
+      {
+        limit,
+        cursor,
+      },
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -81,10 +86,7 @@ export class ReactionsController {
   @ApiOperation({ summary: 'Toggle like on a chapter' })
   @ApiParam({ name: 'chapterId', description: 'Chapter id' })
   @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  toggleLike(
-    @Param('chapterId') chapterId: string,
-    @Req() request: any,
-  ) {
+  toggleLike(@Param('chapterId') chapterId: string, @Req() request: any) {
     return this.reactionsService.toggleLike(
       chapterId,
       request.user.sub,
@@ -111,4 +113,3 @@ export class ReactionsController {
     );
   }
 }
-
