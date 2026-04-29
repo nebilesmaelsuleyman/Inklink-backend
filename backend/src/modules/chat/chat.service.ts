@@ -304,7 +304,7 @@ export class ChatService {
               .select('name username profilePicture')
               .lean()
               .exec();
-            
+
             if (profile) {
               otherParticipantName = profile.name || profile.username;
               otherParticipantAvatar = profile.profilePicture || null;

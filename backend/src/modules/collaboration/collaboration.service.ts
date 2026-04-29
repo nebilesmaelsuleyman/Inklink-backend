@@ -78,7 +78,10 @@ export class CollaborationService {
 
   async getUserInvites(userId: string) {
     return this.collaborationModel
-      .find({ userId: new Types.ObjectId(userId), status: CollaborationStatus.PENDING })
+      .find({
+        userId: new Types.ObjectId(userId),
+        status: CollaborationStatus.PENDING,
+      })
       .populate('workId', 'title coverImage')
       .populate('invitedBy', 'username')
       .exec();

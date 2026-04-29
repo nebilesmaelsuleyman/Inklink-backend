@@ -5,7 +5,8 @@ export enum MessageType {
 
 export class MessageProtocol {
   static encode(type: MessageType, payload: Uint8Array): Uint8Array {
-    const body = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
+    const body =
+      payload instanceof Uint8Array ? payload : new Uint8Array(payload);
     const length = body.byteLength;
     const message = new Uint8Array(1 + 4 + length);
     const view = new DataView(message.buffer);
