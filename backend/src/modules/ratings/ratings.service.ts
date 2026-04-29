@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { RATING_MODEL_NAME, RatingDocument } from './schema/rating.schema';
@@ -35,8 +39,10 @@ export class RatingsService {
 
   async getWorkRating(workId: string, userId?: string) {
     const workObjectId = new Types.ObjectId(workId);
-    
-    const work = await this.workModel.findById(workObjectId).select('averageRating ratingsCount');
+
+    const work = await this.workModel
+      .findById(workObjectId)
+      .select('averageRating ratingsCount');
     if (!work) throw new NotFoundException('Work not found');
 
     let userRating: number | null = null;
