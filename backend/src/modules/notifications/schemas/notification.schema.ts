@@ -5,6 +5,7 @@ export enum NotificationType {
   CHAPTER = 'chapter',
   ANNOUNCEMENT = 'announcement',
   MESSAGE = 'message',
+  COLLABORATION = 'collaboration',
 }
 
 export type NotificationDocument = Notification & Document;
