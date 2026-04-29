@@ -6,11 +6,17 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { CHAPTER_MODEL_NAME, ChapterDocument } from '../chapters/schema/chapter.schema';
+import {
+  CHAPTER_MODEL_NAME,
+  ChapterDocument,
+} from '../chapters/schema/chapter.schema';
 import { USER_MODEL_NAME, UserDocument } from '../users/user.schema';
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
 import { CreateCommentDto } from './dto/create-comment.dto';
-import { REACTION_MODEL_NAME, ReactionDocument } from './schema/reaction.schema';
+import {
+  REACTION_MODEL_NAME,
+  ReactionDocument,
+} from './schema/reaction.schema';
 
 type Role = 'user' | 'admin' | 'parent' | 'child';
 
@@ -222,7 +228,9 @@ export class ReactionsService {
       ? Math.max(1, Math.min(50, limitRaw))
       : 20;
 
-    const cursorId = params?.cursor ? this.toObjectId(params.cursor, 'cursor') : null;
+    const cursorId = params?.cursor
+      ? this.toObjectId(params.cursor, 'cursor')
+      : null;
 
     const query: any = {
       chapterId: parsedChapterId,
@@ -274,6 +282,84 @@ export class ReactionsService {
     };
   }
 
+  /**
+   * Aggregate reaction counts (likes + comments) per work for a list of work IDs.
+   * Returns a Map keyed by workId string → { likesCount, commentsCount, viewsCount }.
+   */
+  async getWorkReactionSummaries(workIds: string[]) {
+    const workObjectIds = workIds.map((id) => this.toObjectId(id, 'workId'));
+    if (workObjectIds.length === 0) return new Map<string, any>();
+
+    // Get all chapter IDs grouped by workId
+    const chapters = await this.chapterModel
+      .find({ workId: { $in: workObjectIds } })
+      .select('_id workId')
+      .lean()
+      .exec();
+
+    if (chapters.length === 0) {
+      const empty = new Map<string, any>();
+      workObjectIds.forEach((oid) =>
+        empty.set(oid.toString(), { likesCount: 0, commentsCount: 0, viewsCount: 0 }),
+      );
+      return empty;
+    }
+
+    // Build chapterId → workId mapping
+    const chapterToWork = new Map<string, string>();
+    chapters.forEach((c: any) => {
+      chapterToWork.set(c._id.toString(), c.workId.toString());
+    });
+
+    const chapterIds = chapters.map((c: any) => c._id);
+
+    // Aggregate reactions across all chapters
+    const counts = await this.reactionModel
+      .aggregate([
+        {
+          $match: {
+            chapterId: { $in: chapterIds },
+            type: { $in: ['like', 'comment'] },
+          },
+        },
+        {
+          $lookup: {
+            from: 'chapters',
+            localField: 'chapterId',
+            foreignField: '_id',
+            as: 'chapter',
+          },
+        },
+        { $unwind: '$chapter' },
+        {
+          $group: {
+            _id: { workId: '$chapter.workId', type: '$type' },
+            count: { $sum: 1 },
+          },
+        },
+      ])
+      .exec();
+
+    const byWorkId = new Map<
+      string,
+      { likesCount: number; commentsCount: number; viewsCount: number }
+    >();
+    workObjectIds.forEach((oid) =>
+      byWorkId.set(oid.toString(), { likesCount: 0, commentsCount: 0, viewsCount: 0 }),
+    );
+
+    counts.forEach((row: any) => {
+      const workId = row._id.workId.toString();
+      const type = row._id.type;
+      const entry = byWorkId.get(workId);
+      if (!entry) return;
+      if (type === 'like') entry.likesCount = row.count;
+      if (type === 'comment') entry.commentsCount = row.count;
+    });
+
+    return byWorkId;
+  }
+
   async getSummariesForChapters(args: {
     chapterIds: string[];
     requesterId?: string;
@@ -300,7 +386,10 @@ export class ReactionsService {
       ])
       .exec();
 
-    const byChapterId = new Map<string, { likesCount: number; commentsCount: number; viewerHasLiked: boolean }>();
+    const byChapterId = new Map<
+      string,
+      { likesCount: number; commentsCount: number; viewerHasLiked: boolean }
+    >();
     chapterObjectIds.forEach((oid) =>
       byChapterId.set(oid.toString(), {
         likesCount: 0,
