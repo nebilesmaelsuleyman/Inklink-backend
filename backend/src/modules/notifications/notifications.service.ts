@@ -22,7 +22,11 @@ export class NotificationsService {
 
     // Map to the frontend structure
     const updates = notifications
-      .filter((n) => n.type === NotificationType.CHAPTER || n.type === NotificationType.ANNOUNCEMENT)
+      .filter(
+        (n) =>
+          n.type === NotificationType.CHAPTER ||
+          n.type === NotificationType.ANNOUNCEMENT,
+      )
       .map((n) => ({
         id: n._id.toString(),
         type: n.type,
@@ -53,9 +57,12 @@ export class NotificationsService {
 
   async markAsRead(userId: string, notificationId: string) {
     const notification = await this.notificationModel.findOneAndUpdate(
-      { _id: new Types.ObjectId(notificationId), userId: new Types.ObjectId(userId) },
+      {
+        _id: new Types.ObjectId(notificationId),
+        userId: new Types.ObjectId(userId),
+      },
       { isRead: true },
-      { returnDocument: 'after' }
+      { returnDocument: 'after' },
     );
     if (!notification) throw new NotFoundException('Notification not found');
     return notification;
@@ -64,5 +71,24 @@ export class NotificationsService {
   // Helper method for seeding
   async createNotification(data: Partial<NotificationDocument>) {
     return this.notificationModel.create(data);
+  }
+
+  async createMessageNotification(
+    senderId: string,
+    recipientId: string,
+    content: string,
+    roomId: string,
+    senderName?: string,
+  ) {
+    return this.notificationModel.create({
+      userId: new Types.ObjectId(recipientId),
+      type: NotificationType.MESSAGE,
+      title: senderName || 'New Message',
+      description: content,
+      metadata: {
+        senderName,
+        referenceId: roomId,
+      },
+    });
   }
 }
