@@ -9,6 +9,8 @@ import { Model, Types } from 'mongoose';
 import { ChatRoomKind, ChatRoomType } from './schema/chat-room.schema';
 import { ChatMembership, ChatMemberRole } from './schema/membership.schema';
 import { ChatMessage } from './schema/message.schema';
+import { PROFILE_MODEL_NAME } from '../profile/profile.model';
+import { Profile } from '../profile/profile.type';
 
 type ObjectIdLike = Types.ObjectId | string | { toString(): string };
 
@@ -20,6 +22,8 @@ export class ChatService {
     private readonly membershipModel: Model<ChatMembership>,
     @InjectModel('ChatMessage')
     private readonly messageModel: Model<ChatMessage>,
+    @InjectModel(PROFILE_MODEL_NAME)
+    private readonly profileModel: Model<Profile>,
   ) {}
 
   private asObjectId(id: ObjectIdLike | string): Types.ObjectId {
@@ -235,5 +239,104 @@ export class ChatService {
     });
 
     return created.toObject();
+  }
+
+  async getRoomMembers(chatRoomId: ObjectIdLike | string) {
+    const roomId = this.asObjectId(chatRoomId);
+    return this.membershipModel.find({ chatRoomId: roomId }).lean().exec();
+  }
+
+  async getOrCreateDirectRoom(userAId: string, userBId: string) {
+    const ids = [userAId, userBId].sort();
+    const directKey = `direct:${ids[0]}:${ids[1]}`;
+
+    const existing = await this.ChatModel.findOne({ type: 'direct', directKey })
+      .lean()
+      .exec();
+    if (existing) return existing;
+
+    const created = await this.ChatModel.create({
+      type: 'direct',
+      directKey,
+    });
+
+    await this.ensureMembership(created._id, userAId, 'member');
+    await this.ensureMembership(created._id, userBId, 'member');
+
+    return created.toObject();
+  }
+
+  async getUserConversations(userId: string) {
+    const memberships = await this.membershipModel
+      .find({ userId })
+      .lean()
+      .exec();
+    const roomIds = memberships.map((m) => m.chatRoomId);
+
+    const rooms = await this.ChatModel.find({ _id: { $in: roomIds } })
+      .lean()
+      .exec();
+
+    const roomsWithLastMessage = await Promise.all(
+      rooms.map(async (room) => {
+        const lastMessage = await this.messageModel
+          .findOne({ chatRoomId: room._id })
+          .sort({ createdAt: -1 })
+          .lean()
+          .exec();
+
+        // For direct chats, we might want to find the other participant's ID
+        let otherParticipantId: string | null = null;
+        let otherParticipantName: string | null = null;
+        let otherParticipantAvatar: string | null = null;
+
+        if (room.type === 'direct') {
+          const members = await this.membershipModel
+            .find({ chatRoomId: room._id })
+            .lean()
+            .exec();
+          otherParticipantId =
+            members.find((m) => m.userId !== userId)?.userId || null;
+
+          if (otherParticipantId) {
+            const profile = await this.profileModel
+              .findById(otherParticipantId)
+              .select('name username profilePicture')
+              .lean()
+              .exec();
+            
+            if (profile) {
+              otherParticipantName = profile.name || profile.username;
+              otherParticipantAvatar = profile.profilePicture || null;
+            }
+          }
+        }
+
+        return {
+          ...room,
+          lastMessage,
+          otherParticipantId,
+          otherParticipantName,
+          otherParticipantAvatar,
+        };
+      }),
+    );
+
+    return roomsWithLastMessage.sort((a, b) => {
+      const timeA = a.lastMessage?.createdAt || a.createdAt;
+      const timeB = b.lastMessage?.createdAt || b.createdAt;
+      return new Date(timeB).getTime() - new Date(timeA).getTime();
+    });
+  }
+
+  async getMessages(chatRoomId: ObjectIdLike | string, userId: string) {
+    const roomId = this.asObjectId(chatRoomId);
+    await this.assertRoomMember(roomId, userId);
+
+    return this.messageModel
+      .find({ chatRoomId: roomId })
+      .sort({ createdAt: 1 })
+      .lean()
+      .exec();
   }
 }
