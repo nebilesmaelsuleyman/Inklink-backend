@@ -12,6 +12,10 @@ import { MessageProtocol, MessageType } from '../protocol/message.protocol';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import { YjsPersistenceService } from '../../yjs/yjs-persistence.service';
 
+import { CollaborationService } from '../collaboration.service';
+import { ChaptersService } from '../../chapters/chapters.service';
+import { WorksService } from '../../works/works.service';
+
 @WebSocketGateway({ path: '/collab' })
 export class CollaborationGateway
   implements OnGatewayConnection, OnGatewayDisconnect
@@ -25,6 +29,9 @@ export class CollaborationGateway
     private readonly yjsPersistenceService: YjsPersistenceService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly collaborationService: CollaborationService,
+    private readonly chaptersService: ChaptersService,
+    private readonly worksService: WorksService,
   ) {}
 
   async handleConnection(client: WebSocket, req: any) {
@@ -34,7 +41,34 @@ export class CollaborationGateway
       return;
     }
 
-    const roomName = this.extractRoom(req);
+    const roomName = this.extractRoom(req); // chapterId
+    
+    // Permission Check
+    try {
+      const chapter = await this.chaptersService.findOneById(roomName);
+      if (!chapter) {
+        client.close(4404, 'Chapter not found');
+        return;
+      }
+
+      const work = await this.worksService.findOneById(chapter.workId.toString());
+      if (!work) {
+        client.close(4404, 'Work not found');
+        return;
+      }
+
+      const isOwner = work.authorId.toString() === userId;
+      const isCollab = await this.collaborationService.isCollaborator(work._id.toString(), userId);
+
+      if (!isOwner && !isCollab) {
+        client.close(4403, 'Forbidden');
+        return;
+      }
+    } catch (err) {
+      console.error('Collaboration auth error:', err);
+      client.close(4500, 'Internal Server Error');
+      return;
+    }
     const room = await this.roomService.getOrCreate(roomName);
 
     if (!this.hydratedRooms.has(roomName) && room.connections.size === 0) {
@@ -58,9 +92,7 @@ export class CollaborationGateway
     client.send(MessageProtocol.encode(MessageType.Sync, state));
 
     // initial awareness (if any)
-    const awarenessClientIds = Array.from(
-      room.awareness.getStates().keys(),
-    ) as number[];
+    const awarenessClientIds = Array.from(room.awareness.getStates().keys()) as number[];
     if (awarenessClientIds.length > 0) {
       const awarenessUpdate = awarenessProtocol.encodeAwarenessUpdate(
         room.awareness,
