@@ -16,6 +16,7 @@ import { CreateUserDto } from '../users/dto/create-user.dto';
 type AuthenticatedUser = {
   sub: string;
   username: string;
+  email: string;
   role: 'user' | 'admin' | 'parent' | 'child';
   parentId?: string;
 };
@@ -78,6 +79,7 @@ export class AuthService {
     const user = {
       sub: String(createdUser._id),
       username: createdUser.username,
+      email: (createdUser as any).email || '',
       role: (createdUser.role as any) || 'user',
       parentId: (createdUser as any).parentId
         ? String((createdUser as any).parentId)
@@ -142,6 +144,7 @@ export class AuthService {
     return {
       sub: String(user._id),
       username: user.username,
+      email: user.email || '',
       role: (user.role as any) || 'user',
       parentId: (user as any).parentId
         ? String((user as any).parentId)

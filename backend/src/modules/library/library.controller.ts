@@ -10,16 +10,35 @@ import {
   Req,
 } from '@nestjs/common';
 import { LibraryService } from './library.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Assume this exists in common/auth module
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UsersService } from '../users/users.service';
+import { UnauthorizedException } from '@nestjs/common';
 
 @Controller('library')
 @UseGuards(JwtAuthGuard)
 export class LibraryController {
-  constructor(private readonly libraryService: LibraryService) {}
+  constructor(
+    private readonly libraryService: LibraryService,
+    private readonly usersService: UsersService,
+  ) {}
 
   @Get()
   getLibrary(@Req() req) {
     return this.libraryService.getLibrary(req.user.sub);
+  }
+
+  @Get('child/:childId')
+  async getChildLibrary(@Req() req, @Param('childId') childId: string) {
+    const parentId = req.user.sub;
+    const child = await this.usersService.findOne(childId);
+
+    if (!child || String((child as any).parentId) !== String(parentId)) {
+      throw new UnauthorizedException(
+        'You are not authorized to view this library',
+      );
+    }
+
+    return this.libraryService.getLibrary(childId);
   }
 
   @Post('currently-reading')
