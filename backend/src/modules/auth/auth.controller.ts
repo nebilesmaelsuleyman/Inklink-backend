@@ -22,16 +22,16 @@ import {
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 
-type AuthenticatedRequest = Request & {
-  user: {
+type MaybeAuthenticatedRequest = Request & {
+  user?: {
     sub: string;
     username: string;
     role: 'user' | 'admin';
-  };
+  } | null;
 };
 
 @ApiTags('auth')
@@ -100,14 +100,13 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get the current authenticated user' })
   @ApiCookieAuth('auth_token')
   @ApiOkResponse({ description: 'Current authenticated user' })
-  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
-  getMe(@Req() request: AuthenticatedRequest) {
+  getMe(@Req() request: MaybeAuthenticatedRequest) {
     return {
-      user: request.user,
+      user: request.user ?? null,
     };
   }
 

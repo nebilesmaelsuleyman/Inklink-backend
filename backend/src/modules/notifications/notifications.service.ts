@@ -68,6 +68,17 @@ export class NotificationsService {
     return notification;
   }
 
+  async deleteNotification(userId: string, notificationId: string) {
+    const result = await this.notificationModel.deleteOne({
+      _id: new Types.ObjectId(notificationId),
+      userId: new Types.ObjectId(userId),
+    });
+    if (result.deletedCount === 0) {
+      throw new NotFoundException('Notification not found');
+    }
+    return { success: true };
+  }
+
   // Helper method for seeding
   async createNotification(data: Partial<NotificationDocument>) {
     return this.notificationModel.create(data);

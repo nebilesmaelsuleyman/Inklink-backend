@@ -160,6 +160,7 @@ export class WorksController {
     return this.worksService.adminFlag(id, request.user.sub);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Delete(':id')
   @ApiOperation({ summary: 'Delete work' })
   @ApiParam({ name: 'id', description: 'Work id' })

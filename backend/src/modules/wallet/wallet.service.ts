@@ -12,16 +12,19 @@ export class WalletService {
   ) {}
 
   async getWallet(userId: string) {
-    let wallet = await this.walletModel.findOne({ userId: new Types.ObjectId(userId) }).exec();
-    if (!wallet) {
-      wallet = await this.walletModel.create({
-        userId: new Types.ObjectId(userId),
-        balance: 0,
-        adRevenue: 0,
-        premiumRevenue: 0,
-        donationRevenue: 0,
-      });
-    }
+    const wallet = await this.walletModel.findOneAndUpdate(
+      { userId: new Types.ObjectId(userId) },
+      {
+        $setOnInsert: {
+          userId: new Types.ObjectId(userId),
+          balance: 0,
+          adRevenue: 0,
+          premiumRevenue: 0,
+          donationRevenue: 0,
+        },
+      },
+      { upsert: true, new: true },
+    ).exec();
     return wallet;
   }
 

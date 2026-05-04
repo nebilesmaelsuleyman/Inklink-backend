@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import type { ExecutionContext } from '@nestjs/common';
 
 @Injectable()
 export class OptionalJwtAuthGuard extends AuthGuard('jwt') {
-  handleRequest(err, user) {
-    // If there's an error or no user, just return null instead of throwing an exception.
-    // This allows the request to continue with request.user being undefined/null.
-    return user || null;
+  handleRequest<TUser = any>(
+    err: any,
+    user: any,
+    _info: any,
+    _context: ExecutionContext,
+  ): TUser {
+    if (err || !user) return null as unknown as TUser;
+    return user as TUser;
   }
 }
