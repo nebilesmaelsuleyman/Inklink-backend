@@ -564,7 +564,7 @@ export class WorksService {
             moderationUpdatedAt: new Date(),
           },
         },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .lean()
       .exec();

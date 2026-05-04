@@ -178,7 +178,7 @@ export class YjsPersistenceService {
       );
     }
 
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
       const latest = await this.yjsUpdateModel
         .findOne({ documentId })
         .sort({ seq: -1 })
@@ -200,7 +200,7 @@ export class YjsPersistenceService {
           createdAt: created.createdAt,
         };
       } catch (error: any) {
-        if (error?.code !== 11000 || attempt === 2) {
+        if (error?.code !== 11000 || attempt === 9) {
           throw error;
         }
       }

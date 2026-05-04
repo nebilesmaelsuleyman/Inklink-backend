@@ -74,7 +74,13 @@ export class ModerationService {
     }).catch(() => null);
 
     if (!response || !response.ok) {
-      throw new ServiceUnavailableException('Moderation service unavailable');
+      return {
+        decision: 'needs_admin_review',
+        confidence: 0,
+        childSafe: false,
+        adultSafe: false,
+        reason: 'moderation_service_unavailable_fallback',
+      };
     }
 
     const payload = (await response.json()) as {

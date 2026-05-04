@@ -23,7 +23,7 @@ export class WalletService {
           donationRevenue: 0,
         },
       },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: 'after' },
     ).exec();
     return wallet;
   }

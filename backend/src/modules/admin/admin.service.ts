@@ -173,7 +173,7 @@ export class AdminService {
     }
 
     const updated = await this.profileModel
-      .findByIdAndUpdate(id, { $set: { isMonetized } } as any, { new: true })
+      .findByIdAndUpdate(id, { $set: { isMonetized } } as any, { returnDocument: 'after' })
       .lean()
       .exec();
 
@@ -267,7 +267,7 @@ export class AdminService {
             moderationUpdatedAt: new Date(),
           },
         },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .lean()
       .exec();
