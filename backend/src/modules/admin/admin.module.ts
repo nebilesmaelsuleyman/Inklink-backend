@@ -12,6 +12,7 @@ import {
   CHAPTER_MODEL_NAME,
   ChapterSchema,
 } from '../chapters/schema/chapter.schema';
+import { TransactionSchema } from '../wallet/schema/transaction.schema';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import {
       { name: PROFILE_MODEL_NAME, schema: ProfileSchema },
       { name: WORK_MODEL_NAME, schema: WorkSchema },
       { name: CHAPTER_MODEL_NAME, schema: ChapterSchema },
+      { name: 'Transaction', schema: TransactionSchema },
     ]),
   ],
   controllers: [AdminController],

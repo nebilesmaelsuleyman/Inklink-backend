@@ -24,6 +24,11 @@ export class AdminController {
     return this.adminService.getOverview();
   }
 
+  @Get('revenue')
+  getRevenue() {
+    return this.adminService.getRevenue();
+  }
+
   @Get('users')
   getUsers(@Query('search') search?: string) {
     return this.adminService.getUsers(search);

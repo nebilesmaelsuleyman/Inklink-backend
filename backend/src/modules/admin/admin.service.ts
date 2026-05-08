@@ -12,6 +12,7 @@ import { PROFILE_MODEL_NAME } from '../profile/profile.model';
 import { Profile } from '../profile/profile.type';
 import { USER_MODEL_NAME, UserDocument } from '../users/user.schema';
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
+import { TransactionDocument, TransactionType } from '../wallet/schema/transaction.schema';
 
 type PricingPlan = {
   id: string;
@@ -44,7 +45,70 @@ export class AdminService {
     private readonly workModel: Model<WorkDocument>,
     @InjectModel(CHAPTER_MODEL_NAME)
     private readonly chapterModel: Model<ChapterDocument>,
+    @InjectModel('Transaction')
+    private readonly transactionModel: Model<TransactionDocument>,
   ) {}
+
+  async getRevenue() {
+    const now = new Date();
+    const todayStart = new Date(now.setHours(0, 0, 0, 0));
+    
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 7);
+    
+    const monthStart = new Date();
+    monthStart.setMonth(monthStart.getMonth() - 1);
+    
+    const yearStart = new Date();
+    yearStart.setFullYear(yearStart.getFullYear() - 1);
+
+    const periods = [
+      { id: 'today', start: todayStart },
+      { id: 'this_week', start: weekStart },
+      { id: 'this_month', start: monthStart },
+      { id: 'this_year', start: yearStart },
+    ];
+
+    const results: any = {};
+
+    for (const period of periods) {
+      const transactions = await this.transactionModel
+        .find({ createdAt: { $gte: period.start } })
+        .populate('userId', 'username email')
+        .sort({ createdAt: -1 })
+        .lean()
+        .exec();
+
+      const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
+      
+      // Calculate platform cut (mocking some rules since we don't have them in schema)
+      // Premium: 20%, Ad: 100%, Donation: 5%, Premium/Chapters: 15%
+      const getCut = (t: any) => {
+        if (t.type === TransactionType.PREMIUM) return 0.20;
+        if (t.type === TransactionType.AD) return 1.0;
+        if (t.type === TransactionType.DONATION) return 0.05;
+        return 0.15; // default for others like chapter purchases
+      };
+
+      const items = transactions.map((t: any) => {
+        const cut = getCut(t);
+        return {
+          id: t._id.toString(),
+          source: t.description || t.type,
+          from: t.userId?.username || 'Unknown',
+          amount: t.amount,
+          platformCut: cut * 100,
+          platformEarnings: t.amount * cut,
+          type: t.type,
+          date: t.createdAt,
+        };
+      });
+
+      results[period.id] = items;
+    }
+
+    return results;
+  }
 
   async getOverview() {
     const [users, authors, content, monetizedAuthors] = await Promise.all([
