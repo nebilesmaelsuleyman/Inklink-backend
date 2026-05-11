@@ -32,7 +32,7 @@ export class WorksService {
     private readonly notificationsService: NotificationsService,
     @InjectModel('Profile')
     private readonly profileModel: Model<Profile>,
-  ) {}
+  ) { }
 
   async findOneById(id: string) {
     const workId = this.toObjectId(id);
@@ -300,7 +300,7 @@ export class WorksService {
       if (!requesterId) {
         throw new ForbiddenException('Authentication required');
       }
-      
+
       const isOwner = authorIdStr === requesterId;
       const isCollab = await this.collaborationService.isCollaborator(id, requesterId);
 
@@ -568,6 +568,7 @@ export class WorksService {
       )
       .lean()
       .exec();
+
 
     if (!updated) throw new NotFoundException('Work not found');
     return this.mapWork(updated);
