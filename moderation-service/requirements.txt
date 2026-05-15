@@ -1,9 +1,9 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 fastapi
 uvicorn
-transformers
-torch==2.4.1+cpu
-sentence-transformers
+torch==2.5.1+cpu
+transformers==4.46.3
+sentence-transformers==3.1.1
 numpy<2.1
 pandas
 scikit-learn
