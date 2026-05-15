@@ -21,12 +21,35 @@ async function bootstrap() {
   app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  const explicitCorsOrigins = (process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const allowedOrigins = new Set<string>([
+    'http://localhost:3000',
+    frontendUrl,
+    ...explicitCorsOrigins,
+  ]);
+
+  const isAllowedOrigin = (origin: string) => {
+    if (allowedOrigins.has(origin)) return true;
+    // Allow Vercel preview + prod deployments (each deploy can have a unique URL)
+    try {
+      const url = new URL(origin);
+      return url.hostname.endsWith('.vercel.app');
+    } catch {
+      return false;
+    }
+  };
+
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'https://senior-project-ink-link-frontend-89amigmzy.vercel.app',
-      frontendUrl,
-    ],
+    origin: (origin, callback) => {
+      // Non-browser / same-origin requests may not include Origin
+      if (!origin) return callback(null, true);
+      if (isAllowedOrigin(origin)) return callback(null, true);
+      return callback(new Error(`CORS blocked for origin: ${origin}`), false);
+    },
     credentials: true,
   });
 
