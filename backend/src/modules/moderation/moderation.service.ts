@@ -33,7 +33,11 @@ export class ModerationService {
     );
   }
 
-  async ready(): Promise<{ ok: boolean; message: string }> {
+  async ready(): Promise<{
+    ok: boolean;
+    message: string;
+    mode?: 'model' | 'fallback' | 'warming_up' | 'strict' | string;
+  }> {
     const response = await fetch(`${this.baseUrl}/ready`, {
       method: 'GET',
       signal: AbortSignal.timeout(Math.min(this.timeoutMs, 3000)),
@@ -46,12 +50,20 @@ export class ModerationService {
     const payload = (await response.json().catch(() => null)) as {
       ready?: boolean;
       message?: string;
+      mode?: string;
     } | null;
     if (payload && payload.ready === false) {
-      return { ok: false, message: payload.message || 'not_ready' };
+      return {
+        ok: false,
+        message: payload.message || 'not_ready',
+        mode: payload.mode,
+      };
     }
 
-    return { ok: true, message: payload?.message || 'ready' };
+    // "ready" may still mean "fallback" mode (e.g. model artifacts missing).
+    const mode = payload?.mode;
+    const ok = mode ? mode !== 'fallback' : true;
+    return { ok, message: payload?.message || 'ready', mode };
   }
 
   async moderateText(text: string): Promise<ModerationResult> {

@@ -92,6 +92,19 @@ def _ensure_warmup_started() -> None:
 
 @app.on_event("startup")
 def _kickoff_warmup() -> None:
+   # In some deployments (e.g. Render without Docker entrypoint), startup scripts may not run.
+   # Optionally attempt to download/build artifacts on startup.
+   auto_setup = (os.getenv("MODERATION_AUTO_SETUP", "false") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+   ready, _ = _artifacts_ready()
+   if not ready and auto_setup:
+       try:
+           import download_model  # noqa: F401
+           import preprocess_golden  # noqa: F401
+       except Exception:
+           # We'll surface the reason via /ready and fallback behavior.
+           pass
+
    ready, _ = _artifacts_ready()
    if ready:
        _ensure_warmup_started()

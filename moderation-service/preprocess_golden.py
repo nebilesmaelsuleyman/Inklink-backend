@@ -1,6 +1,16 @@
 import pandas as pd
 import numpy as np
 from embedding_utils import get_moderation_results
+from pathlib import Path
+
+DATA_DIR = Path(__file__).resolve().parent / "data"
+
+emb_path = DATA_DIR / "golden_embeddings.npy"
+labels_path = DATA_DIR / "golden_labels.npy"
+
+if emb_path.exists() and labels_path.exists():
+    print("Embeddings already exist; skipping preprocessing.")
+    raise SystemExit(0)
 
 print("Initializing model for embedding generation...")
 df = pd.read_csv("data/golden.csv")
