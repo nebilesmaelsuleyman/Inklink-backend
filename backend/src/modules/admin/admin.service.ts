@@ -51,42 +51,50 @@ export class AdminService {
 
   async getRevenue() {
     const now = new Date();
-    const todayStart = new Date(now.setHours(0, 0, 0, 0));
     
-    const weekStart = new Date();
-    weekStart.setDate(weekStart.getDate() - 7);
+    // Today: Start of today
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
     
-    const monthStart = new Date();
-    monthStart.setMonth(monthStart.getMonth() - 1);
+    // This Week: Start of current week (Sunday)
+    const weekStart = new Date(now);
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(now.getDate() - now.getDay());
     
-    const yearStart = new Date();
-    yearStart.setFullYear(yearStart.getFullYear() - 1);
+    // This Month: Start of current month
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    // This Year: Start of current year
+    const yearStart = new Date(now.getFullYear(), 0, 1);
 
     const periods = [
       { id: 'today', start: todayStart },
       { id: 'this_week', start: weekStart },
       { id: 'this_month', start: monthStart },
       { id: 'this_year', start: yearStart },
-      { id: 'all', start: new Date(0) }, // Beginning of time
+      { id: 'all', start: new Date(0) },
     ];
 
     const results: any = {};
 
     for (const period of periods) {
+      const query = period.id === 'all' ? {} : { createdAt: { $gte: period.start } };
+      
       const transactions = await this.transactionModel
-        .find({ createdAt: { $gte: period.start } })
+        .find(query)
         .populate('userId', 'username email')
         .sort({ createdAt: -1 })
         .lean()
         .exec();
 
-      // Calculate platform cut (mocking some rules since we don't have them in schema)
-      // Premium: 20%, Ad: 100%, Donation: 5%, Premium/Chapters: 15%
+      console.log(`[Revenue] Period: ${period.id}, Query: ${JSON.stringify(query)}, Count: ${transactions.length}`);
+
       const getCut = (t: any) => {
-        if (t.type === TransactionType.PREMIUM) return 0.20;
+        // Handle both 'premium' and 'premium_subscription' types
+        if (t.type === TransactionType.PREMIUM || t.type === 'premium_subscription') return 0.20;
         if (t.type === TransactionType.AD) return 1.0;
         if (t.type === TransactionType.DONATION) return 0.05;
-        return 0.15; // default for others like chapter purchases
+        return 0.15;
       };
 
       const items = transactions.map((t: any) => {
@@ -95,9 +103,9 @@ export class AdminService {
           id: t._id.toString(),
           source: t.description || t.type,
           from: t.userId?.username || 'Unknown',
-          amount: t.amount,
+          amount: t.amount || 0,
           platformCut: cut * 100,
-          platformEarnings: t.amount * cut,
+          platformEarnings: (t.amount || 0) * cut,
           type: t.type,
           date: t.createdAt,
         };
