@@ -67,6 +67,7 @@ export class AdminService {
       { id: 'this_week', start: weekStart },
       { id: 'this_month', start: monthStart },
       { id: 'this_year', start: yearStart },
+      { id: 'all', start: new Date(0) }, // Beginning of time
     ];
 
     const results: any = {};
@@ -79,8 +80,6 @@ export class AdminService {
         .lean()
         .exec();
 
-      const totalAmount = transactions.reduce((sum, t) => sum + t.amount, 0);
-      
       // Calculate platform cut (mocking some rules since we don't have them in schema)
       // Premium: 20%, Ad: 100%, Donation: 5%, Premium/Chapters: 15%
       const getCut = (t: any) => {
