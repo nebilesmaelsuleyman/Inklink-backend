@@ -7,6 +7,7 @@ export interface Profile {
   bio?: string;
 
   followers: Types.ObjectId[];
+  following: Types.ObjectId[];
   likes: number;
 
   readingList: Types.ObjectId[];

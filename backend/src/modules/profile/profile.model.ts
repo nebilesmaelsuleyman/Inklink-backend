@@ -10,7 +10,8 @@ export const ProfileSchema = new Schema<Profile>(
     profilePicture: { type: String },
     bio: { type: String },
 
-    followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    followers: [{ type: Schema.Types.ObjectId, ref: PROFILE_MODEL_NAME }],
+    following: [{ type: Schema.Types.ObjectId, ref: PROFILE_MODEL_NAME }],
     likes: { type: Number, default: 0 },
 
     readingList: [{ type: Schema.Types.ObjectId, ref: 'Work' }],

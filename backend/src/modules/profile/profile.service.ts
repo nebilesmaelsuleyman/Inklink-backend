@@ -23,6 +23,7 @@ export class ProfileService {
     let profile = await this.profileModel
       .findById(userId)
       .populate('followers', 'username profilePicture')
+      .populate('following', 'username profilePicture')
       .populate('readingList')
       .populate('favoriteBook');
 
@@ -40,6 +41,7 @@ export class ProfileService {
           name: user.username, // Default name to username
           bio: 'Welcome to my profile!',
           followers: [],
+          following: [],
           likes: 0,
           isCreator: user.role === 'admin' || user.role === 'user',
         });
@@ -49,6 +51,7 @@ export class ProfileService {
           profile = await this.profileModel
             .findById(userId)
             .populate('followers', 'username profilePicture')
+            .populate('following', 'username profilePicture')
             .populate('readingList')
             .populate('favoriteBook');
 
@@ -66,6 +69,7 @@ export class ProfileService {
     return {
       ...profile.toObject(),
       followersCount: profile.followers?.length || 0,
+      followingCount: profile.following?.length || 0,
       creatorDashboard: profile.isCreator ? `/creator/${profile._id}` : null,
     };
   }
@@ -97,30 +101,48 @@ export class ProfileService {
    * @param targetUserId ID of the user being followed.
    */
   async followUser(currentUserId: string, targetUserId: string) {
-    // Ensure the target profile exists
-    const user = await this.getProfile(targetUserId);
-
-    if (!user) {
-      throw new NotFoundException('User profile not found');
+    if (currentUserId === targetUserId) {
+      throw new Error('You cannot follow yourself');
     }
 
-    // Initialize followers if missing
-    if (!user.followers) {
-      user.followers = [];
+    // Ensure target profile exists
+    const targetProfile = await this.profileModel.findById(targetUserId);
+    if (!targetProfile) {
+      throw new NotFoundException('Target user profile not found');
     }
 
-    const isAlreadyFollowing = user.followers.some(
+    // Ensure actor profile exists
+    const actorProfile = await this.profileModel.findById(currentUserId);
+    if (!actorProfile) {
+      throw new NotFoundException('Your profile not found');
+    }
+
+    const isAlreadyFollowing = targetProfile.followers.some(
       (f: any) => f.toString() === currentUserId,
     );
 
-    if (!isAlreadyFollowing) {
-      user.followers.push(new Types.ObjectId(currentUserId) as any);
+    if (isAlreadyFollowing) {
+      // Unfollow
+      await this.profileModel.updateOne(
+        { _id: new Types.ObjectId(targetUserId) },
+        { $pull: { followers: new Types.ObjectId(currentUserId) } },
+      );
+      await this.profileModel.updateOne(
+        { _id: new Types.ObjectId(currentUserId) },
+        { $pull: { following: new Types.ObjectId(targetUserId) } },
+      );
+    } else {
+      // Follow
       await this.profileModel.updateOne(
         { _id: new Types.ObjectId(targetUserId) },
         { $push: { followers: new Types.ObjectId(currentUserId) } },
       );
+      await this.profileModel.updateOne(
+        { _id: new Types.ObjectId(currentUserId) },
+        { $push: { following: new Types.ObjectId(targetUserId) } },
+      );
     }
 
-    return user;
+    return this.getProfile(targetUserId);
   }
 }
