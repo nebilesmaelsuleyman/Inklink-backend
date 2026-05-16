@@ -34,8 +34,8 @@ export class SubscriptionController {
 
   @Get('subscriptions/plans')
   @ApiOperation({ summary: 'Get available subscription plans' })
-  getPlans() {
-    return this.subscriptionService.getPlans();
+  async getPlans() {
+    return await this.subscriptionService.getPlans();
   }
 
   @UseGuards(JwtAuthGuard)

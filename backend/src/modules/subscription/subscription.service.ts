@@ -28,20 +28,27 @@ import { WalletService } from '../wallet/wallet.service';
 import { TransactionType } from '../wallet/schema/transaction.schema';
 import { ChapaService } from './chapa.service';
 
-/** Pricing config (ETB) */
-const PLAN_PRICING: Record<SubscriptionPlan, { price: number; days: number }> =
-  {
-    weekly: { price: 50, days: 7 },
-    monthly: { price: 150, days: 30 },
-    yearly: { price: 1500, days: 365 },
-  };
+import { promises as fs } from 'fs';
+import path from 'path';
 
 /** Revenue split */
 const AUTHOR_SHARE_PERCENT = 80;
 const PLATFORM_SHARE_PERCENT = 20;
 
+const DEFAULT_PRICING: Record<string, { price: number; days: number }> = {
+  weekly: { price: 50, days: 7 },
+  monthly: { price: 150, days: 30 },
+  yearly: { price: 1500, days: 365 },
+};
+
 @Injectable()
 export class SubscriptionService {
+  private readonly pricingPath = path.resolve(
+    process.cwd(),
+    'data',
+    'admin-pricing.json',
+  );
+
   constructor(
     @InjectModel(SUBSCRIPTION_MODEL_NAME)
     private readonly subscriptionModel: Model<SubscriptionDocument>,
@@ -58,6 +65,27 @@ export class SubscriptionService {
     private readonly walletService: WalletService,
     private readonly chapaService: ChapaService,
   ) {}
+
+  private async getDynamicPricing(): Promise<Record<string, { price: number; days: number }>> {
+    try {
+      const raw = await fs.readFile(this.pricingPath, 'utf-8');
+      const parsed = JSON.parse(raw) as { plans?: any[] };
+      const pricing: any = {};
+      
+      if (parsed.plans && Array.isArray(parsed.plans)) {
+        parsed.plans.forEach(plan => {
+          let days = 30;
+          if (plan.id === 'weekly') days = 7;
+          if (plan.id === 'yearly') days = 365;
+          pricing[plan.id] = { price: plan.price, days };
+        });
+        return pricing;
+      }
+    } catch (err) {
+      console.warn('[SubscriptionService] Could not read dynamic pricing, using defaults:', err.message);
+    }
+    return DEFAULT_PRICING;
+  }
 
   private toObjectId(id: string, field = 'id') {
     if (!Types.ObjectId.isValid(id)) {
@@ -112,7 +140,8 @@ export class SubscriptionService {
       );
     }
 
-    const config = PLAN_PRICING[plan];
+    const pricing = await this.getDynamicPricing();
+    const config = pricing[plan];
     if (!config) throw new BadRequestException('Invalid plan');
 
     const user = await this.userModel
@@ -203,7 +232,8 @@ export class SubscriptionService {
       };
     }
 
-    const config = PLAN_PRICING[pending.plan as SubscriptionPlan];
+    const pricing = await this.getDynamicPricing();
+    const config = pricing[pending.plan as SubscriptionPlan];
     const now = new Date();
     const endDate = new Date(now.getTime() + config.days * 24 * 60 * 60 * 1000);
 
@@ -238,8 +268,9 @@ export class SubscriptionService {
     };
   }
 
-  getPlans() {
-    return Object.entries(PLAN_PRICING).map(([plan, config]) => ({
+  async getPlans() {
+    const pricing = await this.getDynamicPricing();
+    return Object.entries(pricing).map(([plan, config]) => ({
       plan,
       price: config.price,
       days: config.days,
