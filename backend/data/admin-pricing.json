@@ -17,7 +17,7 @@
     {
       "id": "yearly",
       "name": "Yearly",
-      "price": 2000,
+      "price": 2500,
       "currency": "ETB",
       "period": "per year"
     }

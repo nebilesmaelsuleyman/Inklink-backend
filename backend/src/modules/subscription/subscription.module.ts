@@ -15,12 +15,17 @@ import {
   ChapterReadSchema,
 } from './schema/chapter-read.schema';
 import {
+  PRICING_PLAN_MODEL_NAME,
+  PricingPlanSchema,
+} from './schema/pricing-plan.schema';
+import {
   CHAPTER_MODEL_NAME,
   ChapterSchema,
 } from '../chapters/schema/chapter.schema';
 import { WORK_MODEL_NAME, WorkSchema } from '../works/schema/work.schema';
 import { USER_MODEL_NAME, UserSchema } from '../users/user.schema';
 import { WalletModule } from '../wallet/wallet.module';
+import { TransactionSchema } from '../wallet/schema/transaction.schema';
 import { ChapaService } from './chapa.service';
 
 @Module({
@@ -33,6 +38,8 @@ import { ChapaService } from './chapa.service';
       { name: CHAPTER_MODEL_NAME, schema: ChapterSchema },
       { name: WORK_MODEL_NAME, schema: WorkSchema },
       { name: USER_MODEL_NAME, schema: UserSchema },
+      { name: PRICING_PLAN_MODEL_NAME, schema: PricingPlanSchema },
+      { name: 'Transaction', schema: TransactionSchema },
     ]),
   ],
   controllers: [SubscriptionController],

@@ -13,6 +13,7 @@ import { Profile } from '../profile/profile.type';
 import { USER_MODEL_NAME, UserDocument } from '../users/user.schema';
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
 import { TransactionDocument, TransactionType } from '../wallet/schema/transaction.schema';
+import { SUBSCRIPTION_MODEL_NAME, SubscriptionDocument } from '../subscription/schema/subscription.schema';
 
 type PricingPlan = {
   id: string;
@@ -47,6 +48,8 @@ export class AdminService {
     private readonly chapterModel: Model<ChapterDocument>,
     @InjectModel('Transaction')
     private readonly transactionModel: Model<TransactionDocument>,
+    @InjectModel(SUBSCRIPTION_MODEL_NAME)
+    private readonly subscriptionModel: Model<SubscriptionDocument>,
   ) {}
 
   async getRevenue() {
@@ -90,8 +93,8 @@ export class AdminService {
       console.log(`[Revenue] Period: ${period.id}, Query: ${JSON.stringify(query)}, Count: ${transactions.length}`);
 
       const getCut = (t: any) => {
-        // Handle both 'premium' and 'premium_subscription' types
-        if (t.type === TransactionType.PREMIUM || t.type === 'premium_subscription') return 0.20;
+        if (t.type === TransactionType.SUBSCRIPTION || t.type === 'premium_subscription') return 1.0;
+        if (t.type === TransactionType.PREMIUM) return 0.20;
         if (t.type === TransactionType.AD) return 1.0;
         if (t.type === TransactionType.DONATION) return 0.05;
         return 0.15;
@@ -118,18 +121,18 @@ export class AdminService {
   }
 
   async getOverview() {
-    const [users, authors, content, monetizedAuthors] = await Promise.all([
+    const [users, authors, content, premiumSubscriptions] = await Promise.all([
       this.userModel.countDocuments(),
       this.profileModel.countDocuments({ isCreator: true }),
       this.chapterModel.countDocuments(),
-      this.profileModel.countDocuments({ isCreator: true, isMonetized: true } as any),
+      this.subscriptionModel.countDocuments({ status: 'active' }),
     ]);
 
     return {
       users,
       authors,
       content,
-      premiumSubscriptions: monetizedAuthors,
+      premiumSubscriptions,
       platformHealth: 98.5,
       serverStatus: 'operational',
     };
@@ -390,6 +393,27 @@ export class AdminService {
     );
 
     return { plans: normalizedPlans };
+  }
+
+  async getSubscriptions() {
+    const subs = await this.subscriptionModel
+      .find()
+      .populate('userId', 'username email')
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+    return subs.map((sub: any) => ({
+      id: sub._id.toString(),
+      userId: sub.userId?._id?.toString(),
+      username: sub.userId?.username || 'Unknown',
+      email: sub.userId?.email || '',
+      plan: sub.plan,
+      price: sub.price,
+      status: sub.status,
+      startDate: sub.startDate,
+      endDate: sub.endDate,
+    }));
   }
 
   private async ensurePricingFile() {

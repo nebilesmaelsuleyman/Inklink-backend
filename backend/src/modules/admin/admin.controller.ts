@@ -78,6 +78,11 @@ export class AdminController {
     return this.adminService.deleteContent(id);
   }
 
+  @Get('subscriptions')
+  getSubscriptions() {
+    return this.adminService.getSubscriptions();
+  }
+
   @Get('pricing')
   getPricing() {
     return this.adminService.getPricing();

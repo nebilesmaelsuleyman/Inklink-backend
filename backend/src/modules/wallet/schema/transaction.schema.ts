@@ -5,6 +5,7 @@ export enum TransactionType {
   PREMIUM = 'premium',
   DONATION = 'donation',
   WITHDRAWAL = 'withdrawal',
+  SUBSCRIPTION = 'premium_subscription',
 }
 
 export interface TransactionDocument extends Document {

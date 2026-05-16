@@ -25,7 +25,7 @@ import {
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
 import { USER_MODEL_NAME, UserDocument } from '../users/user.schema';
 import { WalletService } from '../wallet/wallet.service';
-import { TransactionType } from '../wallet/schema/transaction.schema';
+import { TransactionDocument, TransactionType } from '../wallet/schema/transaction.schema';
 import { ChapaService } from './chapa.service';
 
 import { promises as fs } from 'fs';
@@ -62,6 +62,8 @@ export class SubscriptionService {
     private readonly workModel: Model<WorkDocument>,
     @InjectModel(USER_MODEL_NAME)
     private readonly userModel: Model<UserDocument>,
+    @InjectModel('Transaction')
+    private readonly transactionModel: Model<TransactionDocument>,
     private readonly walletService: WalletService,
     private readonly chapaService: ChapaService,
   ) {}
@@ -241,6 +243,14 @@ export class SubscriptionService {
     pending.startDate = now;
     pending.endDate = endDate;
     await pending.save();
+
+    // Create transaction for revenue tracking
+    await this.transactionModel.create({
+      userId: pending.userId,
+      amount: pending.price,
+      type: TransactionType.SUBSCRIPTION,
+      description: `Premium Subscription: ${pending.plan.toUpperCase()}`,
+    });
 
     return {
       id: pending._id.toString(),

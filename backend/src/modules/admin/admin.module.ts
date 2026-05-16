@@ -13,6 +13,14 @@ import {
   ChapterSchema,
 } from '../chapters/schema/chapter.schema';
 import { TransactionSchema } from '../wallet/schema/transaction.schema';
+import {
+  PRICING_PLAN_MODEL_NAME,
+  PricingPlanSchema,
+} from '../subscription/schema/pricing-plan.schema';
+import {
+  SUBSCRIPTION_MODEL_NAME,
+  SubscriptionSchema,
+} from '../subscription/schema/subscription.schema';
 
 @Module({
   imports: [
@@ -22,6 +30,8 @@ import { TransactionSchema } from '../wallet/schema/transaction.schema';
       { name: WORK_MODEL_NAME, schema: WorkSchema },
       { name: CHAPTER_MODEL_NAME, schema: ChapterSchema },
       { name: 'Transaction', schema: TransactionSchema },
+      { name: PRICING_PLAN_MODEL_NAME, schema: PricingPlanSchema },
+      { name: SUBSCRIPTION_MODEL_NAME, schema: SubscriptionSchema },
     ]),
   ],
   controllers: [AdminController],
