@@ -76,9 +76,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const socket = this.clients.get(recipientId);
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(payload);
-      } else if (recipientId !== senderId) {
-        // Only create persistent notification if the recipient is offline
-        // and it's not the sender themselves
+      }
+      
+      if (recipientId !== senderId) {
+        // Always create a persistent notification for the recipient
         await this.notificationsService.createMessageNotification(
           senderId,
           recipientId,
