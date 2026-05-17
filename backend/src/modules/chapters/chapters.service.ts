@@ -208,7 +208,7 @@ export class ChaptersService {
     const parsedWorkId = this.toObjectId(workId, 'workId');
 
     const chapters = await this.chapterModel
-      .find({ workId: parsedWorkId })
+      .find({ workId: parsedWorkId, moderationStatus: 'approved' })
       .sort({ orderIndex: 1, createdAt: 1 })
       .lean()
       .exec();
