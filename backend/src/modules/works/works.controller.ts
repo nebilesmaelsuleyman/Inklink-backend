@@ -142,8 +142,9 @@ export class WorksController {
   approveByAdmin(
     @Param('id') id: string,
     @Req() request: AuthenticatedRequest,
+    @Body() body?: { childSafe?: boolean; adultSafe?: boolean },
   ) {
-    return this.worksService.adminApprove(id, request.user.sub);
+    return this.worksService.adminApprove(id, request.user.sub, body);
   }
 
   @Post('admin/:id/moderation/reject')

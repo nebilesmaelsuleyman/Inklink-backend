@@ -69,8 +69,12 @@ export class AdminController {
   }
 
   @Patch('content/:id/publish')
-  publishContent(@Param('id') id: string, @Req() req: any) {
-    return this.adminService.publishContent(id, req.user?.sub);
+  publishContent(
+    @Param('id') id: string,
+    @Req() req: any,
+    @Body() body?: { childSafe?: boolean; adultSafe?: boolean },
+  ) {
+    return this.adminService.publishContent(id, req.user?.sub, body);
   }
 
   @Delete('content/:id')

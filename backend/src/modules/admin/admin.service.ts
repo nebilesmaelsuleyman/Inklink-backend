@@ -376,7 +376,7 @@ export class AdminService {
     });
   }
 
-  async publishContent(id: string, adminId?: string) {
+  async publishContent(id: string, adminId?: string, options?: { childSafe?: boolean; adultSafe?: boolean }) {
     const updated = await this.chapterModel
       .findByIdAndUpdate(
         id,
@@ -385,6 +385,8 @@ export class AdminService {
             moderationStatus: 'approved',
             moderationReason: 'approved_by_admin',
             moderationUpdatedAt: new Date(),
+            childSafe: options?.childSafe ?? true,
+            adultSafe: options?.adultSafe ?? true,
           },
         },
         { returnDocument: 'after' },

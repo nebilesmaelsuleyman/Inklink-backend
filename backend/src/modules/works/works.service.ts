@@ -509,7 +509,11 @@ export class WorksService {
     };
   }
 
-  async adminApprove(id: string, adminId: string) {
+  async adminApprove(
+    id: string,
+    adminId: string,
+    options?: { childSafe?: boolean; adultSafe?: boolean },
+  ) {
     const workId = this.toObjectId(id);
     const reviewerId = this.toObjectId(adminId, 'adminId');
 
@@ -523,6 +527,8 @@ export class WorksService {
             reviewedBy: reviewerId,
             reviewedAt: new Date(),
             moderationUpdatedAt: new Date(),
+            childSafe: options?.childSafe ?? true,
+            adultSafe: options?.adultSafe ?? true,
           },
         },
         { returnDocument: 'after' },
