@@ -18,9 +18,11 @@ import {
   SUBSCRIPTION_MODEL_NAME,
   SubscriptionSchema,
 } from '../subscription/schema/subscription.schema';
+import { WorkAggregationModule } from '../work-aggregation/work-aggregation.module';
 
 @Module({
   imports: [
+    WorkAggregationModule,
     MongooseModule.forFeature([
       { name: USER_MODEL_NAME, schema: UserSchema },
       { name: PROFILE_MODEL_NAME, schema: ProfileSchema },

@@ -23,6 +23,7 @@ import {
   SUBSCRIPTION_MODEL_NAME,
   SubscriptionDocument,
 } from '../subscription/schema/subscription.schema';
+import { WorkAggregationService } from '../work-aggregation/work-aggregation.service';
 
 type PricingPlan = {
   id: string;
@@ -77,6 +78,7 @@ export class AdminService {
     private readonly transactionModel: Model<TransactionDocument>,
     @InjectModel(SUBSCRIPTION_MODEL_NAME)
     private readonly subscriptionModel: Model<SubscriptionDocument>,
+    private readonly workAggregationService: WorkAggregationService,
   ) {}
 
   async getRevenue() {
@@ -395,6 +397,14 @@ export class AdminService {
       .exec();
 
     if (!updated) throw new NotFoundException('Content not found');
+
+    await this.workAggregationService.recomputeAndPersist(
+      new Types.ObjectId((updated as any).workId),
+      {
+        reviewedBy: adminId ? new Types.ObjectId(adminId) : undefined,
+        reviewedAt: new Date(),
+      },
+    );
 
     return {
       id: updated._id.toString(),
