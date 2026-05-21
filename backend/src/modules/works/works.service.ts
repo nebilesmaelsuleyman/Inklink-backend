@@ -14,7 +14,7 @@ import { ReactionsService } from '../reactions/reactions.service';
 import { CollaborationService } from '../collaboration/collaboration.service';
 import { CreateWorkDto } from './dto/create-work.dto';
 import { UpdateWorkDto } from './dto/update-work.dto';
-import { WORK_MODEL_NAME, WorkDocument } from './schema/work.schema';
+import { WORK_MODEL_NAME, WorkDocument, WorkStatus } from './schema/work.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/schemas/notification.schema';
 import { Profile } from '../profile/profile.type';
@@ -33,6 +33,25 @@ export class WorksService {
     @InjectModel('Profile')
     private readonly profileModel: Model<Profile>,
   ) {}
+
+  private buildWorkModerationResult(
+    status: WorkStatus,
+    moderationConfidence: number,
+    moderationReason: string,
+    childSafe: boolean,
+    adultSafe: boolean,
+  ) {
+    return {
+      status,
+      moderationConfidence,
+      moderationReason,
+      childSafe,
+      adultSafe,
+      moderationUpdatedAt: new Date(),
+      reviewedBy: undefined,
+      reviewedAt: undefined,
+    };
+  }
 
   async findOneById(id: string) {
     const workId = this.toObjectId(id);
@@ -101,39 +120,32 @@ export class WorksService {
   private async evaluateAndBuildModerationFields(text: string) {
     try {
       const result = await this.moderationService.moderateText(text);
-      const status =
+      const status: WorkStatus =
         result.decision === 'approved'
           ? 'approved'
           : result.decision === 'rejected'
             ? 'rejected'
             : 'needs_admin_review';
 
-      return {
+      return this.buildWorkModerationResult(
         status,
-        moderationConfidence: result.confidence,
-        moderationReason: result.reason,
-        childSafe: result.childSafe,
-        adultSafe: result.adultSafe,
-        moderationUpdatedAt: new Date(),
-        reviewedBy: undefined,
-        reviewedAt: undefined,
-      };
+        result.confidence,
+        result.reason,
+        result.childSafe,
+        result.adultSafe,
+      );
     } catch (err) {
       console.warn(
         'Moderation service failed, falling back to admin review',
         err,
       );
-      return {
-        status: 'needs_admin_review',
-        moderationConfidence: 0,
-        moderationReason:
-          'Moderation service unavailable. Manual review required.',
-        childSafe: false,
-        adultSafe: false,
-        moderationUpdatedAt: new Date(),
-        reviewedBy: undefined,
-        reviewedAt: undefined,
-      };
+      return this.buildWorkModerationResult(
+        'needs_admin_review',
+        0,
+        'Moderation service unavailable. Manual review required.',
+        false,
+        false,
+      );
     }
   }
 
@@ -157,7 +169,7 @@ export class WorksService {
       [title, createWorkDto.summary || ''].join('\n\n'),
     );
 
-    const created = await this.workModel.create({
+    const created = new this.workModel({
       authorId,
       title,
       summary: (createWorkDto.summary || '').trim(),
@@ -165,6 +177,7 @@ export class WorksService {
       tags: this.normalizeTags(createWorkDto.tags),
       ...moderationFields,
     });
+    await created.save();
 
     return this.mapWork(created.toObject());
   }

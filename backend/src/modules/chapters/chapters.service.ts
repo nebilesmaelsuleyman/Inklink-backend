@@ -16,7 +16,11 @@ import { USER_MODEL_NAME, UserDocument } from '../users/user.schema';
 import { CreateChapterDto } from './dto/create-chapter.dto';
 import { ReorderChaptersDto } from './dto/reorder-chapters.dto';
 import { UpdateChapterDto } from './dto/update-chapter.dto';
-import { CHAPTER_MODEL_NAME, ChapterDocument } from './schema/chapter.schema';
+import {
+  CHAPTER_MODEL_NAME,
+  ChapterDocument,
+  ChapterModerationStatus,
+} from './schema/chapter.schema';
 import { ModerationService } from '../moderation/moderation.service';
 import { CollaborationService } from '../collaboration/collaboration.service';
 import { SubscriptionService } from '../subscription/subscription.service';
@@ -40,6 +44,23 @@ export class ChaptersService {
     private readonly subscriptionService: SubscriptionService,
     private readonly ttsService: TtsService,
   ) {}
+
+  private buildChapterModerationResult(
+    moderationStatus: ChapterModerationStatus,
+    moderationConfidence: number,
+    moderationReason: string,
+    childSafe: boolean,
+    adultSafe: boolean,
+  ) {
+    return {
+      moderationStatus,
+      moderationConfidence,
+      moderationReason,
+      childSafe,
+      adultSafe,
+      moderationUpdatedAt: new Date(),
+    };
+  }
 
   private toObjectId(id: string, field = 'id') {
     if (!Types.ObjectId.isValid(id)) {
@@ -75,33 +96,32 @@ export class ChaptersService {
   private async evaluateAndBuildModerationFields(text: string) {
     try {
       const result = await this.moderationService.moderateText(text);
-      return {
-        moderationStatus:
-          result.decision === 'approved'
-            ? 'approved'
-            : result.decision === 'rejected'
-              ? 'rejected'
-              : 'needs_admin_review',
-        moderationConfidence: result.confidence,
-        moderationReason: result.reason,
-        childSafe: result.childSafe,
-        adultSafe: result.adultSafe,
-        moderationUpdatedAt: new Date(),
-      };
+      const moderationStatus: ChapterModerationStatus =
+        result.decision === 'approved'
+          ? 'approved'
+          : result.decision === 'rejected'
+            ? 'rejected'
+            : 'needs_admin_review';
+
+      return this.buildChapterModerationResult(
+        moderationStatus,
+        result.confidence,
+        result.reason,
+        result.childSafe,
+        result.adultSafe,
+      );
     } catch (err) {
       console.warn(
         'Moderation service failed, falling back to admin review',
         err,
       );
-      return {
-        moderationStatus: 'needs_admin_review',
-        moderationConfidence: 0,
-        moderationReason:
-          'Moderation service unavailable. Manual review required.',
-        childSafe: false,
-        adultSafe: false,
-        moderationUpdatedAt: new Date(),
-      };
+      return this.buildChapterModerationResult(
+        'needs_admin_review',
+        0,
+        'Moderation service unavailable. Manual review required.',
+        false,
+        false,
+      );
     }
   }
 
@@ -257,7 +277,7 @@ export class ChaptersService {
       orderIndex = latest ? latest.orderIndex + 1 : 0;
     }
 
-    const created = await this.chapterModel.create({
+    const created = new this.chapterModel({
       workId: parsedWorkId,
       title,
       orderIndex,
@@ -267,6 +287,7 @@ export class ChaptersService {
         [title, createChapterDto.contentText || ''].join('\n\n'),
       )),
     });
+    await created.save();
 
     // Fire-and-forget: notify bookmarkers of this work
     void this.dispatchChapterNotifications(parsedWorkId, title);
