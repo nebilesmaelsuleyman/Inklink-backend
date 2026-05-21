@@ -1,98 +1,110 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🚀 InkLink - Collaborative & AI-Powered Backend Core
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Welcome to the **InkLink Backend Engine**. Built with NestJS, Mongoose, and TypeScript, this progressive Node.js server serves as the core coordinator for the InkLink social reading and collaborative writing platform. It is engineered with robust transaction databases, atomic state locks, collaborative Yjs syncing, and AI moderation pipelines.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 🛠️ Key Architectural Components
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### 1. 🛡️ AI Moderation Pipeline
+- **Automated Text Verification**: Intercepts title and content submissions, routing them to the local moderation engine for sentiment and safety classification.
+- **Safety Tags**: Sets explicit `childSafe` and `adultSafe` tags to filter search and browse listings based on reader status.
+- **Dual Manual Approvals**: Exposes secure NestJS guards for administrative endpoints, supporting manual overrides:
+  - **Approve for Children**: Sets `childSafe: true`, `adultSafe: false`.
+  - **Approve for Both**: Sets `childSafe: true`, `adultSafe: true`.
 
-## Project setup
+### 2. ✍️ Real-Time Collaborative Yjs Engine
+- Seamlessly resolves concurrent user keystrokes for collaborative editing sessions.
+- Persists document states atomically to prevent save conflicts or data loss.
 
-```bash
-$ npm install
+### 3. 💳 Wallet & Chapa Payment Gateway
+- **Transaction Processing**: Tracks dynamic subscription payments and premium chapter purchases using atomic Mongoose operators.
+- **Transaction Log Ledger**: Supports logging of multiple transaction typologies, including `SUBSCRIPTION` (premium subscriptions), `PREMIUM` (locked contents in ETB), `DONATION`, and `AD` earnings.
+- **Real-Time Revenue Analytics**: Aggregates earnings over granular temporal dimensions (Today, This Week, This Month, This Year, All-Time) with built-in platform commission calculators.
+
+### 4. 🎙️ Neural Text-to-Speech (TTS)
+- Translates dynamic chapter contents into neural speech streams on-the-fly.
+- Supports sentence-boundary chunking, language routing (Amharic & English), and standard streaming formats.
+
+### 5. 👥 Social Network Graph & Feed Announcements
+- Tracks follow relationships between readers and authors.
+- Dispatches atomic database-driven notifications upon new book publications or chapter additions to keep bookmarks and followers updated in real-time.
+
+---
+
+## 🛠️ Technology Stack
+
+- **Framework**: NestJS (TypeScript Node.js)
+- **Database**: MongoDB (via Mongoose ODM)
+- **Real-Time Communication**: Socket.io & Yjs Collaborative WebSockets
+- **External APIs**: Chapa Integration, AI Moderation Services
+- **Validation**: class-validator & class-transformer
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+Make sure you have Node.js (v18+), MongoDB (running locally or in a container), and npm installed.
+
+### Installation
+
+1. Navigate to the backend directory:
+   ```bash
+   cd ink-link_backend/backend
+   ```
+
+2. Install core dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Configure Environment Variables:
+   Create a `.env` file inside the `backend` folder:
+   ```env
+   PORT=5000
+   MONGO_URI=mongodb://localhost:27017/inklink
+   JWT_SECRET=your_jwt_signing_secret_here
+   MODERATION_SERVICE_URL=http://localhost:8000
+   CHAPA_API_KEY=your_chapa_secret_key
+   ```
+
+4. Compile and Run the Server:
+   ```bash
+   # Development mode with hot-reloading
+   npm run start:dev
+
+   # Build production package
+   npm run build
+
+   # Start production server
+   npm run start:prod
+   ```
+
+---
+
+## 📁 Repository Directory Map
+
+```
+src/
+├── common/             # Global interceptors, custom decorators, and core guards (e.g. AdminRoleGuard)
+├── modules/
+│   ├── admin/          # Platform wide overviews, financial ledgers, pricing updates, and core subscription checks
+│   ├── auth/           # Secure JWT-based registration, logins, and route guards
+│   ├── chapters/       # Book chapters, locking rules, safety tags, and publication announcements
+│   ├── collaboration/  # Shared workspace tracking for co-authored titles
+│   ├── moderation/     # AI text validation wrappers and fallback guards
+│   ├── notifications/  # Follower feeds and real-time app notifications
+│   ├── profile/        # Social graphs, followers/following profiles
+│   ├── subscription/   # Chapa payment processing, plan registries, and subscription models
+│   ├── tts/            # Text-to-Speech neural stream generation
+│   ├── wallet/         # Ledger journals and atomic transactions
+│   └── works/          # Authors' book collections, tagging, and browse aggregates
 ```
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ npm run start
+## 🛡️ License
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
-```
-
-## Run tests
-
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+This project is licensed under the MIT License - see the LICENSE file for details.
