@@ -172,16 +172,19 @@ export class AdminService {
     };
   }
 
-  async getUsers(search?: string) {
-    const query =
-      search && search.trim()
-        ? {
-            $or: [
-              { username: { $regex: search.trim(), $options: 'i' } },
-              { email: { $regex: search.trim(), $options: 'i' } },
-            ],
-          }
-        : {};
+  async getUsers(search?: string, role?: string) {
+    const query: any = {};
+
+    if (search && search.trim()) {
+      query.$or = [
+        { username: { $regex: search.trim(), $options: 'i' } },
+        { email: { $regex: search.trim(), $options: 'i' } },
+      ];
+    }
+
+    if (role && role.trim()) {
+      query.role = role.trim();
+    }
 
     const users = await this.userModel
       .find(query)
@@ -212,6 +215,9 @@ export class AdminService {
         bio: profile?.bio || '',
         joinDate: user.createdAt,
         profileImage: profile?.profilePicture || '',
+        role: user.role,
+        parentId: user.parentId ? user.parentId.toString() : undefined,
+        username: user.username,
       };
     });
   }
