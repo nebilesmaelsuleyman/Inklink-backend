@@ -30,8 +30,8 @@ export class AdminController {
   }
 
   @Get('users')
-  getUsers(@Query('search') search?: string) {
-    return this.adminService.getUsers(search);
+  getUsers(@Query('search') search?: string, @Query('role') role?: string) {
+    return this.adminService.getUsers(search, role);
   }
 
   @Delete('users/:id')
