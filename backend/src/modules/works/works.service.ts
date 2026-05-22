@@ -414,18 +414,51 @@ export class WorksService {
     const existing = await this.workModel.findById(workId).lean().exec();
     if (!existing) throw new NotFoundException('Work not found');
 
-    // Works are metadata, so we allow publishing even if they are in 'needs_admin_review'
-    // Chapters will be strictly moderated.
+    // If the work was rejected, disallow publishing.
     if (existing.status === 'rejected') {
       throw new BadRequestException(
         'This work has been rejected by moderation and cannot be published.',
       );
     }
 
+    const chapters = await this.chaptersService.listByWork(id, requesterId);
+    if (chapters.length === 0) {
+      throw new BadRequestException(
+        'A work must have at least one chapter before it can be published.',
+      );
+    }
+
+    const approvedChapters = chapters.filter(
+      (c: any) => c.moderationStatus === 'approved',
+    );
+    const pendingChapters = chapters.filter(
+      (c: any) => c.moderationStatus === 'needs_admin_review',
+    );
+    const rejectedChapters = chapters.filter(
+      (c: any) => c.moderationStatus === 'rejected',
+    );
+
+    // If everything is rejected
+    if (rejectedChapters.length === chapters.length) {
+      throw new BadRequestException(
+        'All chapters have been rejected by moderation. Please edit your content.',
+      );
+    }
+
+    let nextStatus: string = 'published';
+
+    // If the work itself needs admin review, or if there are no approved chapters but there are pending ones
+    if (
+      existing.status === 'needs_admin_review' ||
+      (approvedChapters.length === 0 && pendingChapters.length > 0)
+    ) {
+      nextStatus = 'needs_admin_review';
+    }
+
     const updated = await this.workModel
       .findByIdAndUpdate(
         workId,
-        { $set: { status: 'published' } },
+        { $set: { status: nextStatus } },
         { returnDocument: 'after' },
       )
       .lean()
@@ -434,47 +467,62 @@ export class WorksService {
     if (!updated) throw new NotFoundException('Work not found');
 
     // Notify followers
-    try {
-      const authorProfile = await this.profileModel.findById(updated.authorId);
-      if (
-        authorProfile &&
-        authorProfile.followers &&
-        authorProfile.followers.length > 0
-      ) {
-        const notificationPromises = authorProfile.followers.map((followerId) =>
-          this.notificationsService.createNotification({
-            userId: followerId,
-            type: NotificationType.ANNOUNCEMENT,
-            title: `New Book: ${updated.title}`,
-            description: `${authorProfile.username} just published a new book: ${updated.summary.substring(0, 100)}${updated.summary.length > 100 ? '...' : ''}`,
-            metadata: {
-              authorName: authorProfile.username,
-              authorImage: authorProfile.profilePicture,
-              bookTitle: updated.title,
-              bookImage: updated.coverImage,
-              referenceId: updated._id.toString(),
-            },
-          } as any),
-        );
-        await Promise.all(notificationPromises);
+    if (nextStatus === 'published' && existing.status !== 'published') {
+      try {
+        const authorProfile = await this.profileModel.findById(updated.authorId);
+        if (
+          authorProfile &&
+          authorProfile.followers &&
+          authorProfile.followers.length > 0
+        ) {
+          const notificationPromises = authorProfile.followers.map((followerId) =>
+            this.notificationsService.createNotification({
+              userId: followerId,
+              type: NotificationType.ANNOUNCEMENT,
+              title: `New Book: ${updated.title}`,
+              description: `${authorProfile.username} just published a new book: ${updated.summary.substring(0, 100)}${updated.summary.length > 100 ? '...' : ''}`,
+              metadata: {
+                authorName: authorProfile.username,
+                authorImage: authorProfile.profilePicture,
+                bookTitle: updated.title,
+                bookImage: updated.coverImage,
+                referenceId: updated._id.toString(),
+              },
+            } as any),
+          );
+          await Promise.all(notificationPromises);
+        }
+      } catch (err) {
+        console.error('Failed to notify followers about book publication:', err);
       }
-    } catch (err) {
-      console.error('Failed to notify followers about book publication:', err);
     }
 
     return this.mapWork(updated);
   }
 
   async listReviewQueue(status?: string) {
-    const query: any = {};
+    let workStatusQuery: any;
+    let chapterStatusQuery: any;
 
     if (status === 'needs_admin_review') {
-      query.status = 'needs_admin_review';
+      workStatusQuery = 'needs_admin_review';
+      chapterStatusQuery = 'needs_admin_review';
     } else if (status === 'rejected') {
-      query.status = 'rejected';
+      workStatusQuery = 'rejected';
+      chapterStatusQuery = 'rejected';
     } else {
-      query.status = { $in: ['needs_admin_review', 'rejected'] };
+      workStatusQuery = { $in: ['needs_admin_review', 'rejected'] };
+      chapterStatusQuery = { $in: ['needs_admin_review', 'rejected'] };
     }
+
+    const flaggedWorkIds = await this.chaptersService.getFlaggedWorkIds(chapterStatusQuery);
+
+    const query = {
+      $or: [
+        { status: workStatusQuery },
+        { _id: { $in: flaggedWorkIds } },
+      ],
+    };
 
     const queue = await this.workModel
       .find(query)

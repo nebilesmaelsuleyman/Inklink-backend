@@ -21,6 +21,7 @@ import { ModerationService } from '../moderation/moderation.service';
 import { CollaborationService } from '../collaboration/collaboration.service';
 import { SubscriptionService } from '../subscription/subscription.service';
 import { TtsService } from '../tts/tts.service';
+import { WorkAggregationService } from '../work-aggregation/work-aggregation.service';
 
 @Injectable()
 export class ChaptersService {
@@ -39,6 +40,7 @@ export class ChaptersService {
     @Inject(forwardRef(() => SubscriptionService))
     private readonly subscriptionService: SubscriptionService,
     private readonly ttsService: TtsService,
+    private readonly workAggregationService: WorkAggregationService,
   ) {}
 
   private toObjectId(id: string, field = 'id') {
@@ -270,6 +272,7 @@ export class ChaptersService {
 
     // Fire-and-forget: notify bookmarkers of this work
     void this.dispatchChapterNotifications(parsedWorkId, title);
+    await this.workAggregationService.recomputeAndPersist(parsedWorkId);
 
     return this.mapChapter(created.toObject());
   }
@@ -281,6 +284,13 @@ export class ChaptersService {
   ) {
     const chapterId = this.toObjectId(id);
     await this.assertChapterOwner(chapterId, requesterId);
+
+    const currentChapter = await this.chapterModel
+      .findById(chapterId)
+      .lean()
+      .exec();
+    if (!currentChapter) throw new NotFoundException('Chapter not found');
+    const parsedWorkId = new Types.ObjectId((currentChapter as any).workId);
 
     const updatePayload: any = {};
 
@@ -302,17 +312,14 @@ export class ChaptersService {
       typeof updateChapterDto.title === 'string' ||
       typeof updateChapterDto.contentText === 'string'
     ) {
-      const current = await this.chapterModel.findById(chapterId).lean().exec();
-      if (!current) throw new NotFoundException('Chapter not found');
-
       const nextTitle =
         typeof updatePayload.title === 'string'
           ? updatePayload.title
-          : current.title;
+          : currentChapter.title;
       const nextContent =
         typeof updatePayload.contentText === 'string'
           ? updatePayload.contentText
-          : current.contentText || '';
+          : currentChapter.contentText || '';
 
       Object.assign(
         updatePayload,
@@ -332,6 +339,7 @@ export class ChaptersService {
       .exec();
 
     if (!updated) throw new NotFoundException('Chapter not found');
+    await this.workAggregationService.recomputeAndPersist(parsedWorkId);
     return this.mapChapter(updated);
   }
 
@@ -344,6 +352,9 @@ export class ChaptersService {
       .lean()
       .exec();
     if (!deleted) throw new NotFoundException('Chapter not found');
+    await this.workAggregationService.recomputeAndPersist(
+      new Types.ObjectId((deleted as any).workId),
+    );
     return { ok: true };
   }
 
@@ -409,6 +420,7 @@ export class ChaptersService {
       })),
     );
 
+    await this.workAggregationService.recomputeAndPersist(parsedWorkId);
     return this.listByWork(workId, requesterId);
   }
 
@@ -419,6 +431,19 @@ export class ChaptersService {
     const result = await this.chapterModel
       .deleteMany({ workId: parsedWorkId })
       .exec();
+    await this.workAggregationService.recomputeAndPersist(parsedWorkId);
     return { deletedCount: result.deletedCount };
+  }
+
+  async getFlaggedWorkIds(statusQuery: any): Promise<Types.ObjectId[]> {
+    const chapters = await this.chapterModel
+      .find({ moderationStatus: statusQuery })
+      .select('workId')
+      .lean()
+      .exec();
+    
+    // Deduplicate work IDs
+    const uniqueIds = Array.from(new Set(chapters.map((c) => c.workId.toString())));
+    return uniqueIds.map((id) => new Types.ObjectId(id));
   }
 }
