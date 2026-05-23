@@ -6,6 +6,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { CollaborationModule } from '../collaboration/collaboration.module';
 import { SubscriptionModule } from '../subscription/subscription.module';
 import { TtsModule } from '../tts/tts.module';
+import { WorkAggregationModule } from '../work-aggregation/work-aggregation.module';
 import { USER_MODEL_NAME, UserSchema } from '../users/user.schema';
 import { WORK_MODEL_NAME, WorkSchema } from '../works/schema/work.schema';
 import { ChaptersController } from './chapters.controller';
@@ -18,6 +19,7 @@ import { CHAPTER_MODEL_NAME, ChapterSchema } from './schema/chapter.schema';
     LibraryModule,
     NotificationsModule,
     TtsModule,
+    WorkAggregationModule,
     forwardRef(() => CollaborationModule),
     forwardRef(() => SubscriptionModule),
     MongooseModule.forFeature([
