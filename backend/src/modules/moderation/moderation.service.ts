@@ -15,7 +15,7 @@ export class ModerationService {
 
   private get timeoutMs() {
     return (
-      this.configService.get<number>('moderation.requestTimeoutMs') || 6000
+      this.configService.get<number>('moderation.requestTimeoutMs') || 60000
     );
   }
 
@@ -99,12 +99,49 @@ export class ModerationService {
       child_safe?: boolean;
       adult_safe?: boolean;
       confidence?: number;
+      flag_for_review?: boolean;
+      mode?: string;
     };
 
     const childSafe = Boolean(payload.child_safe);
     const adultSafe = Boolean(payload.adult_safe);
     const confidence = Number(payload.confidence || 0);
+    const flagForReview = Boolean(payload.flag_for_review);
+    const mode = payload.mode || '';
 
+    // ── 1. If moderation service explicitly flags for review, respect that ──
+    if (flagForReview) {
+      return {
+        decision: 'needs_admin_review',
+        confidence,
+        childSafe,
+        adultSafe,
+        reason: `flagged_for_review_by_moderation_service (${mode})`,
+      };
+    }
+
+    // ── 2. Fallback mode: keyword-based only, low confidence is expected ──
+    //    Don't apply the high confidence thresholds to fallback results.
+    if (mode === 'fallback') {
+      if (childSafe && adultSafe) {
+        return {
+          decision: 'approved',
+          confidence: Math.max(confidence, 0.5),
+          childSafe,
+          adultSafe,
+          reason: 'fallback_mode_no_flags_auto_approved',
+        };
+      }
+      return {
+        decision: 'needs_admin_review',
+        confidence,
+        childSafe,
+        adultSafe,
+        reason: 'fallback_mode_flagged_manual_review',
+      };
+    }
+
+    // ── 3. Model mode: use confidence thresholds ──
     const anyUnsafe = !childSafe || !adultSafe;
     if (!anyUnsafe && confidence >= this.safeConfidenceThreshold) {
       return {
