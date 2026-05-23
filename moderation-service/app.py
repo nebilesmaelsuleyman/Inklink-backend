@@ -1,5 +1,13 @@
+import sys
 from pathlib import Path
 import os
+
+# Dynamically add the virtual environment's site-packages to sys.path if running under an interpreter that lacks the dependencies
+BASE_DIR = Path(__file__).resolve().parent
+VENV_SITE_PACKAGES = BASE_DIR / "venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+if VENV_SITE_PACKAGES.exists() and str(VENV_SITE_PACKAGES) not in sys.path:
+    sys.path.insert(0, str(VENV_SITE_PACKAGES))
+
 import threading
 from typing import Any, Optional, Tuple
 
@@ -9,13 +17,11 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 
+
 app = FastAPI()
 
-
-BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 MODEL_DIR = BASE_DIR / "model"
-
 
 
 
@@ -23,23 +29,21 @@ class Post(BaseModel):
    text: str
 
 
-
-
 def _is_strict_mode() -> bool:
    normalized = (os.getenv("MODERATION_STRICT_MODE", "false") or "").strip().lower()
    return normalized in {"1", "true", "yes", "on"}
 
 
-
-
 def _artifacts_ready() -> tuple[bool, str]:
    if not (MODEL_DIR / "config.json").exists():
-       return False, "Model not found at /app/model. Run download_model.py first."
+       return False, "Model not found. Run download_model.py first."
+   # Check for at least one tokenizer file
+   has_tokenizer = (MODEL_DIR / "tokenizer.json").exists() or (MODEL_DIR / "sentencepiece.bpe.model").exists()
+   if not has_tokenizer:
+       return False, "Tokenizer not found. Run download_model.py first."
    if not (DATA_DIR / "golden_embeddings.npy").exists() or not (DATA_DIR / "golden_labels.npy").exists():
-       return False, "Embeddings not found in /app/data. Run preprocess_golden.py first."
+       return False, "Embeddings not found. Run preprocess_golden.py first."
    return True, "ready"
-
-
 
 
 ModerationAssets = Tuple[Any, Any, np.ndarray, np.ndarray]
@@ -49,19 +53,16 @@ _warmup_started = False
 _warmup_done = False
 
 
-
-
 def _load_moderation_assets() -> ModerationAssets:
-   from embedding_utils import get_moderation_results, similarity
+   from embedding_utils import get_moderation_results, similarity, ensure_model
 
+   # Pre-load the PyTorch model so the first request doesn't time out
+   ensure_model()
 
    golden_embeddings = np.load(DATA_DIR / "golden_embeddings.npy")
    golden_labels = np.load(DATA_DIR / "golden_labels.npy")
 
-
    return get_moderation_results, similarity, golden_embeddings, golden_labels
-
-
 
 
 def _ensure_warmup_started() -> None:
@@ -69,9 +70,7 @@ def _ensure_warmup_started() -> None:
    if _warmup_started:
        return
 
-
    _warmup_started = True
-
 
    def _warm() -> None:
        global _assets, _assets_error, _warmup_done
@@ -84,16 +83,11 @@ def _ensure_warmup_started() -> None:
        finally:
            _warmup_done = True
 
-
    threading.Thread(target=_warm, daemon=True).start()
-
-
 
 
 @app.on_event("startup")
 def _kickoff_warmup() -> None:
-   # In some deployments (e.g. Render without Docker entrypoint), startup scripts may not run.
-   # Optionally attempt to download/build artifacts on startup.
    auto_setup = (os.getenv("MODERATION_AUTO_SETUP", "false") or "").strip().lower() in {"1", "true", "yes", "on"}
 
    ready, _ = _artifacts_ready()
@@ -102,7 +96,6 @@ def _kickoff_warmup() -> None:
            import download_model  # noqa: F401
            import preprocess_golden  # noqa: F401
        except Exception:
-           # We'll surface the reason via /ready and fallback behavior.
            pass
 
    ready, _ = _artifacts_ready()
@@ -110,10 +103,8 @@ def _kickoff_warmup() -> None:
        _ensure_warmup_started()
 
 
-
-
 def _fallback_moderate(text: str):
-   # Conservative fallback: prefer manual review when the model is unavailable.
+   """Keyword-based fallback when the model is unavailable."""
    normalized = (text or "").lower()
    flagged_terms = ("idiot", "stupid", "kill", "hate", "garbage", "incompetent", "useless")
    contains_flagged = any(term in normalized for term in flagged_terms)
@@ -122,16 +113,15 @@ def _fallback_moderate(text: str):
        "adult_safe": not contains_flagged,
        "confidence": 0.35 if contains_flagged else 0.2,
        "mode": "fallback",
+       "flag_for_review": False,
+       "classifier_probs": {"safe": 0.0, "toxic": 0.0},
    }
-
-
 
 
 @app.get("/ready")
 def readiness():
    strict = _is_strict_mode()
    ready, message = _artifacts_ready()
-
 
    if ready:
        _ensure_warmup_started()
@@ -143,14 +133,10 @@ def readiness():
            return {"ready": True, "message": f"fallback_mode: {_assets_error}", "mode": "fallback"}
        return {"ready": True, "message": "ready", "mode": "model"}
 
-
    if strict:
        return {"ready": False, "message": message, "mode": "strict"}
 
-
    return {"ready": True, "message": f"fallback_mode: {message}", "mode": "fallback"}
-
-
 
 
 @app.post("/moderate")
@@ -162,7 +148,6 @@ def moderate(post: Post):
            raise HTTPException(status_code=503, detail=message)
        return _fallback_moderate(post.text)
 
-
    global _assets, _assets_error
    _ensure_warmup_started()
    if not _warmup_done:
@@ -170,72 +155,88 @@ def moderate(post: Post):
            raise HTTPException(status_code=503, detail="warming_up")
        return _fallback_moderate(post.text)
 
-
    if _assets is None:
        if strict:
            raise HTTPException(status_code=503, detail=_assets_error or "Assets not loaded")
        return _fallback_moderate(post.text)
 
-
-   get_moderation_results, similarity, golden_embeddings, golden_labels = _assets
+   get_moderation_results, similarity_fn, golden_embeddings, golden_labels = _assets
    emb, probs = get_moderation_results(post.text)
-  
-   # 1. Classification decision (Fine-tuned head)
-   # User confirmed: 1 = Safe, 0 = Toxic.
-   # Therefore, probs[1] is the score for Safe, and probs[0] is the score for Toxic.
-   is_safe_by_classifier = probs[1] > 0.5
-   classifier_confidence = float(probs[1] if is_safe_by_classifier else probs[0])
+   
+   # ── 1. Classifier decision (Fine-tuned XLM-R head) ──
+   # Label 0 = NOT_TOXIC (safe), Label 1 = TOXIC (unsafe)
+   safe_score = float(probs[0])
+   toxic_score = float(probs[1])
+   is_safe_by_classifier = safe_score > 0.5
 
-
-   # 2. Vector Context check (Golden CSV)
-   sims = similarity(emb, golden_embeddings)
+   # ── 2. Vector context check (Golden CSV) ──
+   sims = similarity_fn(emb, golden_embeddings)
    best_idx = int(sims.argmax())
    label = golden_labels[best_idx]
    vector_confidence = float(sims[0][best_idx])
-
 
    label_value = label.tolist() if hasattr(label, 'tolist') else label
    child_safe_by_vector = bool(label_value[0]) if isinstance(label_value, list) else bool(label_value)
    adult_safe_by_vector = bool(label_value[1]) if isinstance(label_value, list) else bool(label_value)
 
+   # ── 3. Hybrid decision ──
+   flag_for_review = False
 
-   # Hybrid Decision Logic:
-   if vector_confidence > 0.99:
-       # High confidence match in CSV (Manual Anchor) takes priority!
-       # This allows you to "White-list" or "Black-list" specific stories.
+   if vector_confidence > 0.90:
+       # Very high similarity to a golden entry → anchor override
        child_safe = child_safe_by_vector
        adult_safe = adult_safe_by_vector
-       mode = "vector_anchor_match"
-   else:
-       # 1. Base Classifer Decision
-       # Children: Require high confidence of safety (e.g. > 70%)
-       child_safe = probs[1] > 0.7
-      
-       # Adults: Allow anything except high toxicity (e.g. < 95% toxic)
-       # This provides the "flexibility" you requested.
-       adult_safe = probs[0] < 0.95
+       final_confidence = vector_confidence
+       mode = "vector_anchor"
 
+   elif vector_confidence > 0.70:
+       # Good similarity → blend classifier and vector
+       classifier_says_safe = is_safe_by_classifier
+       vector_says_safe = child_safe_by_vector
 
-       # 2. Vector Refinement (Context check)
-       # Only influence the decision if the vector match is strong enough to trust.
-       if vector_confidence > 0.8:
-           # If a similar story is specifically marked as unsafe for kids, respect that.
-           if not child_safe_by_vector:
+       if classifier_says_safe == vector_says_safe:
+           # Agreement: both say safe or both say unsafe → high trust
+           child_safe = vector_says_safe
+           adult_safe = adult_safe_by_vector
+           final_confidence = max(safe_score if child_safe else toxic_score, vector_confidence)
+           mode = "hybrid_agreement"
+       else:
+           # Disagreement (e.g. classifier biased against Amharic)
+           # Trust the vector at higher confidence levels
+           if vector_confidence > 0.80:
+               child_safe = vector_says_safe
+               adult_safe = adult_safe_by_vector
+               final_confidence = vector_confidence
+               mode = "vector_override"
+           else:
+               # Uncertain — send to admin
                child_safe = False
-           # If a similar story is specifically marked as safe for adults, respect that.
-           if adult_safe_by_vector:
-               adult_safe = True
-      
-       mode = "classifier_hybrid"
+               adult_safe = adult_safe_by_vector or classifier_says_safe
+               final_confidence = min(safe_score, vector_confidence)
+               mode = "hybrid_disagreement"
+               flag_for_review = True
 
+   else:
+       # Low vector match → classifier only
+       child_safe = safe_score > 0.7
+       adult_safe = toxic_score < 0.95
+       final_confidence = float(safe_score if child_safe else toxic_score)
+       mode = "classifier_only"
+       # Flag if classifier is uncertain
+       if 0.4 < safe_score < 0.6:
+           flag_for_review = True
 
-   final_confidence = max(float(probs[1] if child_safe else probs[0]), vector_confidence)
+   # Also flag if child and adult safety disagree (edge case)
+   if child_safe != adult_safe and not flag_for_review:
+       flag_for_review = True
 
-
-   # Flag for manual review if they disagree significantly
-   # or if the classifier is in the "unsure" zone (0.4 - 0.6)
-   flag_for_review = (child_safe != adult_safe) or (probs[1] > 0.4 and probs[1] < 0.6)
-
+   # Apply optional label inversion if environment variable is set
+   if os.getenv('MODERATION_INVERT_LABELS', 'false').strip().lower() in {'1', 'true', 'yes', 'on'}:
+       child_safe = not child_safe
+       adult_safe = not adult_safe
+       # Optionally adjust flag_for_review: if either safety flipped to unsafe, flag for review
+       if not child_safe or not adult_safe:
+           flag_for_review = True
 
    return {
        "child_safe": bool(child_safe),
@@ -243,17 +244,14 @@ def moderate(post: Post):
        "flag_for_review": bool(flag_for_review),
        "confidence": float(final_confidence),
        "mode": mode,
-       "classifier_probs": probs.tolist()
+       "classifier_probs": {"safe": safe_score, "toxic": toxic_score},
+       "vector_confidence": float(vector_confidence),
    }
-
-
 
 
 @app.post("/moderation")
 def moderation_alias(post: Post):
    return moderate(post)
-
-
 
 
 @app.get("/test")

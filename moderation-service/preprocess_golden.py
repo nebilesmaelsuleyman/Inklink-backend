@@ -1,20 +1,36 @@
-import pandas as pd
-import numpy as np
-from embedding_utils import get_moderation_results
+import sys
 from pathlib import Path
+
+# Dynamically add the virtual environment's site-packages to sys.path if running under an interpreter that lacks the dependencies
+BASE_DIR = Path(__file__).resolve().parent
+VENV_SITE_PACKAGES = BASE_DIR / "venv" / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+if VENV_SITE_PACKAGES.exists() and str(VENV_SITE_PACKAGES) not in sys.path:
+    sys.path.insert(0, str(VENV_SITE_PACKAGES))
+
+import numpy as np
+
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 
 emb_path = DATA_DIR / "golden_embeddings.npy"
 labels_path = DATA_DIR / "golden_labels.npy"
 
+
 def main() -> int:
-    if emb_path.exists() and labels_path.exists():
+    force = "--force" in sys.argv
+
+    if not force and emb_path.exists() and labels_path.exists():
         print("Embeddings already exist; skipping preprocessing.")
+        print("Use --force to regenerate.")
         return 0
 
+    # Import lazily so `import preprocess_golden` from app.py doesn't
+    # trigger model loading as a side-effect.
+    import pandas as pd
+    from embedding_utils import get_moderation_results
+
     print("Initializing model for embedding generation...")
-    df = pd.read_csv("data/golden.csv")
+    df = pd.read_csv(str(DATA_DIR / "golden.csv"))
     print(f"Loaded {len(df)} rows from CSV.")
 
     embeddings = []
@@ -36,8 +52,8 @@ def main() -> int:
     embeddings = np.array(embeddings)
     labels = np.array(labels)
 
-    np.save("data/golden_embeddings.npy", embeddings)
-    np.save("data/golden_labels.npy", labels)
+    np.save(str(emb_path), embeddings)
+    np.save(str(labels_path), labels)
 
     print("Golden dataset processed")
     return 0
