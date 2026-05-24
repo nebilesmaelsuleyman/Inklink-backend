@@ -9,6 +9,7 @@ import {
 import { LIBRARY_MODEL_NAME } from './modules/library/schemas/library.schema';
 import { getModelToken } from '@nestjs/mongoose';
 import { WORK_MODEL_NAME } from './modules/works/schema/work.schema';
+import { hash } from 'bcryptjs';
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
@@ -19,6 +20,33 @@ async function bootstrap() {
   const libraryModel = app.get(getModelToken(LIBRARY_MODEL_NAME));
 
   console.log('--- SEEDING START ---');
+
+  // 0. Ensure the admin account exists and can log in
+  const adminUsername = 'admin';
+  const adminEmail = 'admin@gmail.com';
+  const adminPassword = '123456789';
+
+  let admin: any = await usersService.findByEmailOrUsername(adminEmail);
+  if (!admin) {
+    admin = await usersService.findByUsername(adminUsername);
+  }
+
+  if (!admin) {
+    admin = await usersService.create({
+      username: adminUsername,
+      email: adminEmail,
+      password: adminPassword,
+      role: 'admin',
+    });
+    console.log('Created admin account');
+  } else {
+    admin.username = adminUsername;
+    admin.email = adminEmail;
+    admin.role = 'admin';
+    admin.password = await hash(adminPassword, 10);
+    await admin.save();
+    console.log('Updated admin account');
+  }
 
   // 1. Ensure Demo Author exists
   let author: any = await usersService.findByUsername('demo_author');
