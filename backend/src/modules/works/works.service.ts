@@ -206,20 +206,57 @@ export class WorksService {
   }
 
   async browse(requesterId?: string, role?: string, tag?: string) {
-    const query: any = { status: 'published' };
+    const matchQuery: any = { status: 'published' };
     if (tag) {
-      query.tags = tag;
+      matchQuery.tags = tag;
     }
 
     if (role === 'child') {
-      query.childSafe = true;
+      matchQuery.childSafe = true;
     }
 
-    const works = await this.workModel
-      .find(query)
-      .sort({ updatedAt: -1 })
-      .lean()
-      .exec();
+    const works = await this.workModel.aggregate([
+      {
+        $match: matchQuery,
+      },
+      {
+        $lookup: {
+          from: 'chapters',
+          let: { workId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$workId', '$$workId'] },
+                    { $eq: ['$moderationStatus', 'approved'] },
+                    {
+                      $regexMatch: {
+                        input: { $ifNull: ['$contentText', ''] },
+                        regex: /\S/,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: 'visibleChapters',
+        },
+      },
+      {
+        $match: {
+          'visibleChapters.0': { $exists: true },
+        },
+      },
+      {
+        $project: {
+          visibleChapters: 0,
+        },
+      },
+      { $sort: { updatedAt: -1 } },
+    ]);
 
     const mapped = works.map((work) => this.mapWork(work));
 
@@ -244,6 +281,37 @@ export class WorksService {
     const works = await this.workModel.aggregate([
       {
         $lookup: {
+          from: 'chapters',
+          let: { workId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$workId', '$$workId'] },
+                    { $eq: ['$moderationStatus', 'approved'] },
+                    {
+                      $regexMatch: {
+                        input: { $ifNull: ['$contentText', ''] },
+                        regex: /\S/,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+            { $limit: 1 },
+          ],
+          as: 'visibleChapters',
+        },
+      },
+      {
+        $match: {
+          'visibleChapters.0': { $exists: true },
+        },
+      },
+      {
+        $lookup: {
           from: 'users',
           localField: 'authorId',
           foreignField: '_id',
@@ -260,6 +328,11 @@ export class WorksService {
             { 'author.username': searchRegex },
             { tags: { $in: [searchRegex] } },
           ],
+        },
+      },
+      {
+        $project: {
+          visibleChapters: 0,
         },
       },
       { $sort: { averageRating: -1, updatedAt: -1 } },
@@ -337,6 +410,10 @@ export class WorksService {
       };
       return { ...chapter, ...summary };
     });
+
+    if (work.status === 'published' && chaptersWithReactions.length === 0) {
+      throw new NotFoundException('Work not found');
+    }
 
     return {
       ...this.mapWork({ ...work, authorId: authorIdStr }),
