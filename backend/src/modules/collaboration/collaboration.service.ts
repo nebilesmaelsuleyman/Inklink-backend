@@ -76,6 +76,17 @@ export class CollaborationService {
       .exec();
   }
 
+  async getCollaborator(workId: string, userId: string) {
+    return this.collaborationModel
+      .findOne({
+        workId: new Types.ObjectId(workId),
+        userId: new Types.ObjectId(userId),
+        status: CollaborationStatus.ACCEPTED,
+      })
+      .lean()
+      .exec();
+  }
+
   async getUserInvites(userId: string) {
     return this.collaborationModel
       .find({
@@ -122,6 +133,11 @@ export class CollaborationService {
       status: CollaborationStatus.ACCEPTED,
     });
     return !!collab;
+  }
+
+  async canEditWork(workId: string, userId: string): Promise<boolean> {
+    const collab = await this.getCollaborator(workId, userId);
+    return collab?.role === CollaborationRole.EDITOR;
   }
 
   async getCollaboratedWorks(userId: string) {

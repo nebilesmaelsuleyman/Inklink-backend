@@ -148,6 +148,24 @@ export class WorksService {
     }
   }
 
+  private async assertWorkEditor(workId: Types.ObjectId, requesterId: string) {
+    const work = await this.workModel.findById(workId).lean().exec();
+    if (!work) throw new NotFoundException('Work not found');
+
+    if (work.authorId.toString() === requesterId) {
+      return;
+    }
+
+    const canEdit = await this.collaborationService.canEditWork(
+      workId.toString(),
+      requesterId,
+    );
+
+    if (!canEdit) {
+      throw new ForbiddenException('You do not have edit access to this work');
+    }
+  }
+
   async create(requesterId: string, createWorkDto: CreateWorkDto) {
     const authorId = this.toObjectId(requesterId, 'requesterId');
     const title = (createWorkDto.title || '').trim();
@@ -424,7 +442,7 @@ export class WorksService {
 
   async update(id: string, requesterId: string, updateWorkDto: UpdateWorkDto) {
     const workId = this.toObjectId(id);
-    await this.assertWorkOwner(workId, requesterId);
+    await this.assertWorkEditor(workId, requesterId);
 
     const updatePayload: any = {};
 
