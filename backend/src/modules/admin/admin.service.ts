@@ -174,7 +174,7 @@ export class AdminService {
     };
   }
 
-  async getUsers(search?: string) {
+  async getUsers(search?: string, role?: string) {
     const query =
       search && search.trim()
         ? {
@@ -184,6 +184,10 @@ export class AdminService {
             ],
           }
         : {};
+
+    if (role && role.trim()) {
+      (query as any).role = role.trim();
+    }
 
     const users = await this.userModel
       .find(query)
@@ -201,12 +205,49 @@ export class AdminService {
       .lean()
       .exec();
 
+    const parentIds = users
+      .map((user: any) => user.parentId)
+      .filter(Boolean)
+      .map((id) => id.toString());
+
+    const parentUsers = parentIds.length
+      ? await this.userModel
+          .find({ _id: { $in: parentIds } })
+          .select('username email role createdAt')
+          .lean()
+          .exec()
+      : [];
+
+    const parentProfiles = await this.profileModel
+      .find({
+        username: {
+          $in: parentUsers.map((parent: any) => parent.username).filter(Boolean),
+        },
+      })
+      .lean()
+      .exec();
+
     const profileMap = new Map(
       profiles.map((profile: any) => [profile.username, profile]),
     );
 
+    const parentUserMap = new Map(
+      parentUsers.map((parent: any) => [parent._id.toString(), parent]),
+    );
+
+    const parentProfileMap = new Map(
+      parentProfiles.map((profile: any) => [profile.username, profile]),
+    );
+
     return users.map((user: any) => {
       const profile: any = profileMap.get(user.username);
+      const parentUser: any = user.parentId
+        ? parentUserMap.get(user.parentId.toString())
+        : null;
+      const parentProfile: any = parentUser
+        ? parentProfileMap.get(parentUser.username)
+        : null;
+
       return {
         id: user._id.toString(),
         name: profile?.name || user.username,
@@ -214,6 +255,13 @@ export class AdminService {
         bio: profile?.bio || '',
         joinDate: user.createdAt,
         profileImage: profile?.profilePicture || '',
+        role: user.role,
+        parentId: user.parentId?.toString() || '',
+        parentUsername: parentUser?.username || '',
+        parentEmail: parentUser?.email || '',
+        parentName:
+          parentProfile?.name || parentUser?.username || '',
+        parentProfileImage: parentProfile?.profilePicture || '',
       };
     });
   }
