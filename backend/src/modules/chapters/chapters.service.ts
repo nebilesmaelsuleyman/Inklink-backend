@@ -237,6 +237,19 @@ export class ChaptersService {
     );
   }
 
+  private moderateInBackground(chapterId: string, title: string, content: string) {
+    // Background execution without blocking the event loop
+    setTimeout(async () => {
+      try {
+        const text = [title, content].join('\n\n');
+        const moderationResult = await this.evaluateAndBuildModerationFields(text);
+        await this.chapterModel.findByIdAndUpdate(chapterId, { $set: moderationResult }).exec();
+      } catch (err) {
+        console.error('[ChaptersService] Background moderation failed:', err);
+      }
+    }, 100);
+  }
+
   async create(
     workId: string,
     requesterId: string,
@@ -265,10 +278,12 @@ export class ChaptersService {
       orderIndex,
       contentText: createChapterDto.contentText || '',
       price: createChapterDto.price || 0,
-      ...(await this.evaluateAndBuildModerationFields(
-        [title, createChapterDto.contentText || ''].join('\n\n'),
-      )),
+      moderationStatus: 'needs_admin_review', // defaults to needing review while pending
+      moderationConfidence: 0,
     });
+
+    // Run moderation in background so it doesn't block the request if the Python service takes time to wake up
+    this.moderateInBackground(created._id.toString(), title, createChapterDto.contentText || '');
 
     // Fire-and-forget: notify bookmarkers of this work
     void this.dispatchChapterNotifications(parsedWorkId, title);
@@ -321,12 +336,10 @@ export class ChaptersService {
           ? updatePayload.contentText
           : currentChapter.contentText || '';
 
-      Object.assign(
-        updatePayload,
-        await this.evaluateAndBuildModerationFields(
-          [nextTitle, nextContent].join('\n\n'),
-        ),
-      );
+      updatePayload.moderationStatus = 'needs_admin_review';
+      updatePayload.moderationConfidence = 0;
+
+      this.moderateInBackground(chapterId.toString(), nextTitle, nextContent);
     }
 
     const updated = await this.chapterModel
