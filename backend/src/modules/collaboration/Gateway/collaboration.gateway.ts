@@ -215,10 +215,14 @@ export class CollaborationGateway
         ? authHeader.slice(7)
         : null;
 
+      const url = new URL(req.url, 'http://localhost');
+      const ticketToken = url.searchParams.get('ticket');
+
       const cookieName =
         this.configService.get<string>('auth.cookieName') || 'auth_token';
       const cookieToken = this.getCookieValue(req?.headers?.cookie, cookieName);
-      const token = bearerToken || cookieToken;
+      
+      const token = bearerToken || cookieToken || ticketToken;
       if (!token) return null;
 
       const payload = await this.jwtService.verifyAsync<{

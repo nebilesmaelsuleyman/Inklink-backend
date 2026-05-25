@@ -23,6 +23,7 @@ import {
 import { AuthService } from './auth.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CreateUserDto } from '../users/dto/create-user.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 
@@ -108,6 +109,16 @@ export class AuthController {
     return {
       user: request.user ?? null,
     };
+  }
+
+  @Get('ws-ticket')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get a short-lived ticket for WebSocket authentication' })
+  @ApiCookieAuth('auth_token')
+  @ApiOkResponse({ description: 'Ticket generated' })
+  async getWsTicket(@Req() request: MaybeAuthenticatedRequest) {
+    const ticket = await this.authService.generateWsTicket(request.user);
+    return { ticket };
   }
 
   @Post('logout')

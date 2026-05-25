@@ -94,6 +94,10 @@ export class AuthService {
     };
   }
 
+  async generateWsTicket(user: AuthenticatedUser | any) {
+    return this.jwtService.signAsync(user, { expiresIn: '30s' });
+  }
+
   getAuthCookieName(): string {
     return this.configService.get<string>('auth.cookieName') || 'auth_token';
   }
