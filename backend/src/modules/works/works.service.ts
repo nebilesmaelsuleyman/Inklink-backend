@@ -98,9 +98,9 @@ export class WorksService {
     );
   }
 
-  private async evaluateAndBuildModerationFields(text: string) {
+  private async evaluateAndBuildModerationFields(text: string, customTimeoutMs?: number) {
     try {
-      const result = await this.moderationService.moderateText(text);
+      const result = await this.moderationService.moderateText(text, customTimeoutMs);
       const status =
         result.decision === 'approved'
           ? 'approved'
@@ -138,7 +138,12 @@ export class WorksService {
   }
 
   private isModerationServiceUnavailable(reason?: string) {
-    return Boolean(reason && reason.includes('moderation_service_unavailable'));
+    if (!reason) return false;
+    const normalized = reason.toLowerCase();
+    return (
+      normalized.includes('moderation_service_unavailable') ||
+      normalized.includes('moderation service unavailable')
+    );
   }
 
   private async applyWorkModerationResult(
@@ -285,6 +290,7 @@ export class WorksService {
 
     const moderationFields = await this.evaluateAndBuildModerationFields(
       [title, summary].join('\n\n'),
+      3000,
     );
 
     const updated = await this.applyWorkModerationResult(
@@ -606,6 +612,7 @@ export class WorksService {
 
       const moderationFields = await this.evaluateAndBuildModerationFields(
         [nextTitle, nextSummary].join('\n\n'),
+        3000,
       );
 
       const moderated = await this.applyWorkModerationResult(
@@ -639,18 +646,18 @@ export class WorksService {
       );
     }
 
+    // If work is under moderation, return it as-is and let moderation continue in background
     if (
       existing.status === 'pending_moderation' ||
       existing.status === 'needs_admin_review'
     ) {
-      throw new BadRequestException(
-        'This work is still under moderation review. Please wait for the result before publishing.',
-      );
+      return existing;
     }
 
     if (existing.status === 'draft') {
       const moderationFields = await this.evaluateAndBuildModerationFields(
         [existing.title, existing.summary || ''].join('\n\n'),
+        3000,
       );
 
       if (moderationFields.status === 'rejected') {

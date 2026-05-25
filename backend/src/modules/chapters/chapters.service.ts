@@ -5,6 +5,7 @@ import {
   NotFoundException,
   Inject,
   forwardRef,
+  OnApplicationBootstrap,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -24,7 +25,11 @@ import { TtsService } from '../tts/tts.service';
 import { WorkAggregationService } from '../work-aggregation/work-aggregation.service';
 
 @Injectable()
-export class ChaptersService {
+export class ChaptersService implements OnApplicationBootstrap {
+  onApplicationBootstrap() {
+    this.startBackgroundModerator();
+  }
+
   constructor(
     @InjectModel(CHAPTER_MODEL_NAME)
     private readonly chapterModel: Model<ChapterDocument>,
@@ -74,9 +79,9 @@ export class ChaptersService {
     };
   }
 
-  private async evaluateAndBuildModerationFields(text: string) {
+  private async evaluateAndBuildModerationFields(text: string, customTimeoutMs?: number) {
     try {
-      const result = await this.moderationService.moderateText(text);
+      const result = await this.moderationService.moderateText(text, customTimeoutMs);
       return {
         moderationStatus:
           result.decision === 'approved'
@@ -108,7 +113,12 @@ export class ChaptersService {
   }
 
   private isModerationServiceUnavailable(reason?: string) {
-    return Boolean(reason && reason.includes('moderation_service_unavailable'));
+    if (!reason) return false;
+    const normalized = reason.toLowerCase();
+    return (
+      normalized.includes('moderation_service_unavailable') ||
+      normalized.includes('moderation service unavailable')
+    );
   }
 
   private async ensureWorkExists(workId: Types.ObjectId) {
@@ -308,6 +318,7 @@ export class ChaptersService {
 
     const moderationFields = await this.evaluateAndBuildModerationFields(
       [title, createChapterDto.contentText || ''].join('\n\n'),
+      3000,
     );
 
     const updated = await this.chapterModel
@@ -395,6 +406,7 @@ export class ChaptersService {
 
       const moderationFields = await this.evaluateAndBuildModerationFields(
         [nextTitle, nextContent].join('\n\n'),
+        3000,
       );
 
       const moderated = await this.chapterModel
@@ -526,5 +538,65 @@ export class ChaptersService {
       new Set(chapters.map((c) => c.workId.toString())),
     );
     return uniqueIds.map((id) => new Types.ObjectId(id));
+  }
+
+  private async processNeedsAdminReviewQueue() {
+    try {
+      const readyRes = await this.moderationService.ready().catch(() => ({ ok: false }));
+      if (!readyRes.ok) {
+        return;
+      }
+
+      // 1. Process Chapters in needs_admin_review
+      const chapters = await this.chapterModel
+        .find({ moderationStatus: 'needs_admin_review' })
+        .exec();
+
+      for (const chapter of chapters) {
+        const text = [chapter.title, chapter.contentText || ''].join('\n\n');
+        const moderationResult = await this.evaluateAndBuildModerationFields(text);
+        
+        if (moderationResult.moderationStatus !== 'needs_admin_review') {
+          await this.chapterModel.findByIdAndUpdate(chapter._id, {
+            $set: moderationResult,
+          }).exec();
+          
+          await this.workAggregationService.recomputeAndPersist(chapter.workId);
+        }
+      }
+
+      // 2. Process Works in needs_admin_review
+      const works = await this.workModel
+        .find({ status: 'needs_admin_review' })
+        .exec();
+
+      for (const work of works) {
+        const text = [work.title, work.summary || ''].join('\n\n');
+        const moderationResult = await this.evaluateAndBuildModerationFields(text);
+        
+        if (moderationResult.moderationStatus !== 'needs_admin_review') {
+          await this.workModel.findByIdAndUpdate(work._id, {
+            $set: {
+              moderationConfidence: moderationResult.moderationConfidence,
+              moderationReason: moderationResult.moderationReason,
+              childSafe: moderationResult.childSafe,
+              adultSafe: moderationResult.adultSafe,
+              moderationUpdatedAt: moderationResult.moderationUpdatedAt,
+              status: moderationResult.moderationStatus === 'approved' ? 'approved' : moderationResult.moderationStatus === 'rejected' ? 'rejected' : 'needs_admin_review'
+            }
+          }).exec();
+
+          await this.workAggregationService.recomputeAndPersist(work._id);
+        }
+      }
+    } catch (err) {
+      console.error('[ChaptersService] Error in background moderation queue processing:', err);
+    }
+  }
+
+  private startBackgroundModerator() {
+    setInterval(() => {
+      void this.processNeedsAdminReviewQueue();
+    }, 300000); // 5 minutes
   }
 }

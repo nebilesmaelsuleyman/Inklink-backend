@@ -17,8 +17,7 @@ services:
     ports:
       - "${BACKEND_PORT:-4000}:4000"
     depends_on:
-      moderation:
-        condition: service_healthy
+      - moderation
     volumes:
       - ./backend/src:/app/src
       - ./backend/test:/app/test

@@ -66,7 +66,7 @@ export class ModerationService {
     return { ok, message: payload?.message || 'ready', mode };
   }
 
-  async moderateText(text: string): Promise<ModerationResult> {
+  async moderateText(text: string, customTimeoutMs?: number): Promise<ModerationResult> {
     const bodyText = (text || '').trim();
     if (!bodyText) {
       return {
@@ -78,11 +78,12 @@ export class ModerationService {
       };
     }
 
+    const activeTimeout = customTimeoutMs || this.timeoutMs;
     const response = await fetch(`${this.baseUrl}/moderate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text: bodyText }),
-      signal: AbortSignal.timeout(this.timeoutMs),
+      signal: AbortSignal.timeout(activeTimeout),
     }).catch(() => null);
 
     if (!response || !response.ok) {
