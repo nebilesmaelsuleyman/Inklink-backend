@@ -23,14 +23,19 @@ import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { PostsModule } from './modules/posts/posts.module';
 import { TtsModule } from './modules/tts/tts.module';
 
-const optionalImports =
+const dbOptionalImports =
   process.env.DISABLE_DB === 'true'
     ? []
     : [
         DatabaseModule,
         ChatModule,
-        WorksModule,
+        CollaborationModule,
         ChaptersModule,
+        LibraryModule,
+        NotificationsModule,
+        ProfileModule,
+        PostsModule,
+        WorksModule,
         ReactionsModule,
         RatingsModule,
         YjsModule,
@@ -46,15 +51,10 @@ const optionalImports =
       envFilePath: ['.env', '../.env'],
       load: [configuration],
     }),
-    ...optionalImports,
+    ...dbOptionalImports,
     AuthModule,
     UsersModule,
-    CollaborationModule,
     ModerationModule,
-    LibraryModule,
-    NotificationsModule,
-    ProfileModule,
-    PostsModule,
     TtsModule,
   ],
   controllers: [AppController],

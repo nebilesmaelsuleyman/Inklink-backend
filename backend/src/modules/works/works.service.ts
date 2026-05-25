@@ -209,7 +209,7 @@ export class WorksService {
             workId,
             title,
             summary,
-            moderationFields,
+             moderationFields as any,
           );
 
           if (!updated && attempt < 5) {
@@ -265,7 +265,7 @@ export class WorksService {
     if (!title) throw new BadRequestException('title is required');
 
     const summary = (createWorkDto.summary || '').trim();
-    const initialStatus: WorkStatus = createWorkDto.status ?? 'draft';
+     const initialStatus: WorkStatus = 'draft';
 
     const created = await this.workModel.create({
       authorId,
@@ -612,7 +612,7 @@ export class WorksService {
         workId,
         nextTitle,
         nextSummary,
-        moderationFields,
+         moderationFields as any,
       );
 
       if (this.isModerationServiceUnavailable(moderationFields.moderationReason)) {
@@ -727,7 +727,7 @@ export class WorksService {
 
     // If the work itself needs admin review, or if there are no approved chapters but there are pending ones
     if (
-      existing.status === 'needs_admin_review' ||
+       (existing.status as WorkStatus) === 'needs_admin_review' ||
       (approvedChapters.length === 0 && pendingChapters.length > 0)
     ) {
       nextStatus = 'needs_admin_review';

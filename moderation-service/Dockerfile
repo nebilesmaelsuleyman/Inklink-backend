@@ -3,14 +3,15 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
    PYTHONUNBUFFERED=1 \
-   PIP_NO_CACHE_DIR=1
+   PIP_NO_CACHE_DIR=1 \
+   PIP_DEFAULT_TIMEOUT=600
 
 
 WORKDIR /app
 
 
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN pip install --no-cache-dir --progress-bar off --default-timeout 600 -r /app/requirements.txt
 
 
 COPY . /app

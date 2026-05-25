@@ -101,7 +101,7 @@ export class CollaborationGateway
     if (awarenessClientIds.length > 0) {
       const awarenessUpdate = awarenessProtocol.encodeAwarenessUpdate(
         room.awareness,
-        awarenessClientIds,
+         awarenessClientIds as number[],
       );
       client.send(
         MessageProtocol.encode(MessageType.Awareness, awarenessUpdate),
