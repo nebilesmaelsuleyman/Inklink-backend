@@ -13,6 +13,7 @@ import {
 } from '../chapters/schema/chapter.schema';
 import { WorkAggregationService } from '../work-aggregation/work-aggregation.service';
 import { WORK_MODEL_NAME, WorkDocument } from '../works/schema/work.schema';
+import { CollaborationDocument } from '../collaboration/schema/collaboration.schema';
 import {
   YJS_DOCUMENT_MODEL_NAME,
   YjsDocumentEntity,
@@ -39,6 +40,8 @@ export class YjsPersistenceService {
     private readonly chapterModel: Model<ChapterDocument>,
     @InjectModel(WORK_MODEL_NAME)
     private readonly workModel: Model<WorkDocument>,
+    @InjectModel('Collaboration')
+    private readonly collaborationModel: Model<CollaborationDocument>,
     private readonly workAggregationService: WorkAggregationService,
   ) {}
 
@@ -66,6 +69,28 @@ export class YjsPersistenceService {
     }
   }
 
+  private toUint8Array(data: any): Uint8Array {
+    if (!data) {
+      return new Uint8Array(0);
+    }
+    if (data instanceof Uint8Array) {
+      return data;
+    }
+    if (Buffer.isBuffer(data)) {
+      return new Uint8Array(data);
+    }
+    if (data.buffer instanceof Buffer) {
+      return new Uint8Array(data.buffer);
+    }
+    if (typeof data.value === 'function') {
+      const val = data.value();
+      if (val instanceof Uint8Array) {
+        return val;
+      }
+    }
+    return new Uint8Array(data);
+  }
+
   private async resolveDocument(docId: string, requesterId: string) {
     const parsedId = this.toObjectId(docId, 'docId');
 
@@ -89,7 +114,14 @@ export class YjsPersistenceService {
     if (!work) throw new NotFoundException('Work not found for chapter');
 
     const requesterObjectId = this.toObjectId(requesterId, 'requesterId');
-    if (String(work.authorId) !== requesterObjectId.toString()) {
+    const isOwner = String(work.authorId) === requesterObjectId.toString();
+    const isCollab = await this.collaborationModel.exists({
+      workId: work._id,
+      userId: requesterObjectId,
+      status: 'accepted',
+    });
+
+    if (!isOwner && !isCollab) {
       throw new ForbiddenException('You do not have access to this document');
     }
 
@@ -102,16 +134,24 @@ export class YjsPersistenceService {
     return created.toObject();
   }
 
-  private async assertDocumentOwner(
+  private async assertDocumentAccess(
     documentId: Types.ObjectId,
     requesterId: string,
   ) {
-    const ownerId = this.toObjectId(requesterId, 'requesterId');
-    const owned = await this.yjsDocumentModel.exists({
-      _id: documentId,
-      ownerId,
+    const requesterObjectId = this.toObjectId(requesterId, 'requesterId');
+    const doc = await this.yjsDocumentModel.findById(documentId).lean().exec();
+    if (!doc) {
+      throw new NotFoundException('Yjs document not found');
+    }
+
+    const isOwner = String(doc.ownerId) === requesterObjectId.toString();
+    const isCollab = await this.collaborationModel.exists({
+      workId: doc.workId,
+      userId: requesterObjectId,
+      status: 'accepted',
     });
-    if (!owned) {
+
+    if (!isOwner && !isCollab) {
       throw new ForbiddenException('You do not have access to this document');
     }
   }
@@ -126,7 +166,7 @@ export class YjsPersistenceService {
     let lastSeq = 0;
 
     if (snapshot?.state) {
-      Y.applyUpdate(doc, new Uint8Array(snapshot.state));
+      Y.applyUpdate(doc, this.toUint8Array(snapshot.state));
       lastSeq = snapshot.lastSeq || 0;
     }
 
@@ -137,7 +177,7 @@ export class YjsPersistenceService {
       .exec();
 
     for (const entry of updates) {
-      Y.applyUpdate(doc, new Uint8Array(entry.update));
+      Y.applyUpdate(doc, this.toUint8Array(entry.update));
       lastSeq = entry.seq;
     }
 
@@ -147,7 +187,7 @@ export class YjsPersistenceService {
   async appendUpdate(docId: string, requesterId: string, base64Update: string) {
     const yjsDoc = await this.resolveDocument(docId, requesterId);
     const documentId = new Types.ObjectId(yjsDoc._id);
-    await this.assertDocumentOwner(documentId, requesterId);
+    await this.assertDocumentAccess(documentId, requesterId);
     const updateBytes = this.decodeBase64(base64Update, 'update');
 
     const moderationUpdateResult = await this.chapterModel
@@ -212,7 +252,7 @@ export class YjsPersistenceService {
   async getState(docId: string, requesterId: string) {
     const yjsDoc = await this.resolveDocument(docId, requesterId);
     const documentId = new Types.ObjectId(yjsDoc._id);
-    await this.assertDocumentOwner(documentId, requesterId);
+    await this.assertDocumentAccess(documentId, requesterId);
     const { doc, lastSeq } = await this.computeState(documentId);
 
     return {
@@ -226,7 +266,7 @@ export class YjsPersistenceService {
   async getDiff(docId: string, requesterId: string, stateVectorBase64: string) {
     const yjsDoc = await this.resolveDocument(docId, requesterId);
     const documentId = new Types.ObjectId(yjsDoc._id);
-    await this.assertDocumentOwner(documentId, requesterId);
+    await this.assertDocumentAccess(documentId, requesterId);
     const { doc, lastSeq } = await this.computeState(documentId);
     const stateVector = this.decodeBase64(stateVectorBase64, 'sv');
     const diff = Y.encodeStateAsUpdate(doc, stateVector);
@@ -241,7 +281,7 @@ export class YjsPersistenceService {
   async compactSnapshot(docId: string, requesterId: string) {
     const yjsDoc = await this.resolveDocument(docId, requesterId);
     const documentId = new Types.ObjectId(yjsDoc._id);
-    await this.assertDocumentOwner(documentId, requesterId);
+    await this.assertDocumentAccess(documentId, requesterId);
     const { doc, lastSeq } = await this.computeState(documentId);
 
     const state = Buffer.from(Y.encodeStateAsUpdate(doc));

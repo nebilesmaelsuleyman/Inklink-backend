@@ -20,6 +20,7 @@ import {
 } from './schema/yjs-update.schema';
 import { YjsController } from './yjs.controller';
 import { YjsPersistenceService } from './yjs-persistence.service';
+import { CollaborationSchema } from '../collaboration/schema/collaboration.schema';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { YjsPersistenceService } from './yjs-persistence.service';
       { name: YJS_SNAPSHOT_MODEL_NAME, schema: YjsSnapshotSchema },
       { name: CHAPTER_MODEL_NAME, schema: ChapterSchema },
       { name: WORK_MODEL_NAME, schema: WorkSchema },
+      { name: 'Collaboration', schema: CollaborationSchema },
     ]),
   ],
   controllers: [YjsController],

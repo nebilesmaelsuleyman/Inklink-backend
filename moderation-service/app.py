@@ -12,8 +12,11 @@ import threading
 from typing import Any, Optional, Tuple
 
 
+# pyrefly: ignore [missing-import]
 import numpy as np
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI, HTTPException
+# pyrefly: ignore [missing-import]
 from pydantic import BaseModel
 
 
