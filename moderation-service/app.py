@@ -165,81 +165,91 @@ def moderate(post: Post):
 
    get_moderation_results, similarity_fn, golden_embeddings, golden_labels = _assets
    emb, probs = get_moderation_results(post.text)
-   
-   # ── 1. Classifier decision (Fine-tuned XLM-R head) ──
-   # The labels have been reversed during training.
-   # Now: Label 0 = TOXIC (unsafe), Label 1 = NOT_TOXIC (safe)
-   safe_score = float(probs[1])
-   toxic_score = float(probs[0])
-   is_safe_by_classifier = safe_score > 0.5
 
-   # ── 2. Vector context check (Golden CSV) ──
+   # ── 1. XLM-R Classifier (primary authority) ──
+   # The model was trained with inverted labels:
+   # Label 0 = NOT_TOXIC (safe), Label 1 = TOXIC (unsafe)
+   safe_score = float(probs[0])
+   toxic_score = float(probs[1])
+
+   # ── 2. Vector context (secondary signal, used only when classifier is uncertain) ──
    sims = similarity_fn(emb, golden_embeddings)
    best_idx = int(sims.argmax())
    label = golden_labels[best_idx]
    vector_confidence = float(sims[0][best_idx])
 
    label_value = label.tolist() if hasattr(label, 'tolist') else label
-   child_safe_by_vector = not bool(label_value[0]) if isinstance(label_value, list) else not bool(label_value)
-   adult_safe_by_vector = not bool(label_value[1]) if isinstance(label_value, list) else not bool(label_value)
+   child_safe_by_vector = bool(label_value[0]) if isinstance(label_value, list) else bool(label_value)
+   adult_safe_by_vector = bool(label_value[1]) if isinstance(label_value, list) else bool(label_value)
 
-   # ── 3. Hybrid decision ──
+   # ── 3. Decision logic: three-tier content classification ──
+   #
+   #   Tier 1 — Fully safe:       child_safe=True,  adult_safe=True  → approved
+   #   Tier 2 — Adult-only:       child_safe=False, adult_safe=True  → needs_admin_review (age gate)
+   #   Tier 3 — Fully toxic/hate: child_safe=False, adult_safe=False → rejected
+   #
+   # XLM-R handles the safe↔toxic boundary.
+   # The vector database (with separate child_safe / adult_safe columns) refines
+   # whether "not fully safe" means adult-only or truly harmful.
    flag_for_review = False
 
-   if vector_confidence > 0.90:
-       # Very high similarity to a golden entry → anchor override
-       child_safe = child_safe_by_vector
-       adult_safe = adult_safe_by_vector
-       final_confidence = vector_confidence
-       mode = "vector_anchor"
-
-   elif vector_confidence > 0.70:
-       # Good similarity → blend classifier and vector
-       classifier_says_safe = is_safe_by_classifier
-       vector_says_safe = child_safe_by_vector
-
-       if classifier_says_safe == vector_says_safe:
-           # Agreement: both say safe or both say unsafe → high trust
-           child_safe = vector_says_safe
-           adult_safe = adult_safe_by_vector
-           final_confidence = max(safe_score if child_safe else toxic_score, vector_confidence)
-           mode = "hybrid_agreement"
+   # ── Case A: Classifier clearly safe (safe_score ≥ 0.6) ──
+   if safe_score >= 0.6:
+       # Even safe-scoring text might be adult-only (e.g. mature fiction, explicit themes).
+       # Use vector to detect high-confidence adult-only golden matches.
+       if (vector_confidence > 0.75
+               and not child_safe_by_vector
+               and adult_safe_by_vector):
+           child_safe = False
+           adult_safe = True
+           final_confidence = vector_confidence
+           mode = "vector_adult_content"
        else:
-           # Disagreement (e.g. classifier biased against Amharic)
-           # Trust the vector at higher confidence levels
-           if vector_confidence > 0.80:
-               child_safe = vector_says_safe
-               adult_safe = adult_safe_by_vector
-               final_confidence = vector_confidence
-               mode = "vector_override"
-           else:
-               # Uncertain — send to admin
-               child_safe = False
-               adult_safe = adult_safe_by_vector or classifier_says_safe
-               final_confidence = min(safe_score, vector_confidence)
-               mode = "hybrid_disagreement"
-               flag_for_review = True
+           child_safe = True
+           adult_safe = True
+           final_confidence = safe_score
+           mode = "classifier_safe"
 
+   # ── Case B: Classifier says toxic/unsafe (safe_score ≤ 0.4 or moderately toxic) ──
+   elif safe_score <= 0.6:
+       # Guard: if classifier is HIGHLY confident this is toxic (toxic_score > 0.85),
+       # never let the vector rescue it into adult-only.
+       # Hate speech, racism, and clear toxic content are NEVER adult-appropriate.
+       classifier_highly_toxic = toxic_score > 0.85
+
+       # Vector rescue: adult-only content that the binary classifier mislabels as toxic.
+       # Only applies when classifier is NOT highly confident AND vector strongly agrees
+       # this matches an adult-only (not child-safe but adult-safe) golden entry.
+       vector_says_adult_only = (
+           vector_confidence > 0.82
+           and not child_safe_by_vector
+           and adult_safe_by_vector
+       )
+
+       if not classifier_highly_toxic and vector_says_adult_only:
+           child_safe = False
+           adult_safe = True
+           final_confidence = vector_confidence
+           mode = "vector_adult_content_override"
+       else:
+           child_safe = False
+           adult_safe = False
+           final_confidence = toxic_score
+           mode = "classifier_toxic"
+
+   # ── Case C: Uncertain zone — vector tiebreaker ──
    else:
-       # Low vector match → classifier only
-       child_safe = safe_score > 0.7
-       adult_safe = toxic_score < 0.95
-       final_confidence = float(safe_score if child_safe else toxic_score)
-       mode = "classifier_only"
-       # Flag if classifier is uncertain
-       if 0.4 < safe_score < 0.6:
-           flag_for_review = True
-
-   # Also flag if child and adult safety disagree (edge case)
-   if child_safe != adult_safe and not flag_for_review:
-       flag_for_review = True
-
-   # Apply optional label inversion if environment variable is set
-   if os.getenv('MODERATION_INVERT_LABELS', 'false').strip().lower() in {'1', 'true', 'yes', 'on'}:
-       child_safe = not child_safe
-       adult_safe = not adult_safe
-       # Optionally adjust flag_for_review: if either safety flipped to unsafe, flag for review
-       if not child_safe or not adult_safe:
+       if vector_confidence > 0.75:
+           child_safe = child_safe_by_vector
+           adult_safe = adult_safe_by_vector
+           final_confidence = vector_confidence
+           mode = "vector_tiebreaker"
+       else:
+           # Both signals uncertain → send to admin
+           child_safe = False
+           adult_safe = False
+           final_confidence = min(safe_score, 1.0 - safe_score)
+           mode = "uncertain_admin_review"
            flag_for_review = True
 
    return {

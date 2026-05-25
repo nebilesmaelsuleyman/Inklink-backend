@@ -22,14 +22,14 @@ export class ModerationService {
   private get safeConfidenceThreshold() {
     return (
       this.configService.get<number>('moderation.safeConfidenceThreshold') ||
-      0.88
+      0.6
     );
   }
 
   private get unsafeConfidenceThreshold() {
     return (
       this.configService.get<number>('moderation.unsafeConfidenceThreshold') ||
-      0.88
+      0.6
     );
   }
 
@@ -142,9 +142,13 @@ export class ModerationService {
       };
     }
 
-    // ── 3. Model mode: use confidence thresholds ──
-    const anyUnsafe = !childSafe || !adultSafe;
-    if (!anyUnsafe && confidence >= this.safeConfidenceThreshold) {
+    // ── 3. Model mode: three-tier classification ──
+    //   Tier 1 — Fully safe  (child_safe && adult_safe)        → approved
+    //   Tier 2 — Adult-only  (!child_safe && adult_safe)       → needs_admin_review (age gate)
+    //   Tier 3 — Fully toxic (!child_safe && !adult_safe)      → rejected
+
+    // Tier 1: both safe → approve
+    if (childSafe && adultSafe && confidence >= this.safeConfidenceThreshold) {
       return {
         decision: 'approved',
         confidence,
@@ -154,7 +158,19 @@ export class ModerationService {
       };
     }
 
-    if (anyUnsafe && confidence >= this.unsafeConfidenceThreshold) {
+    // Tier 2: adult-only content → route to admin for age-gate decision
+    if (!childSafe && adultSafe) {
+      return {
+        decision: 'needs_admin_review',
+        confidence,
+        childSafe,
+        adultSafe,
+        reason: 'adult_only_content_requires_age_gate_review',
+      };
+    }
+
+    // Tier 3: fully toxic/harmful → reject
+    if (!childSafe && !adultSafe && confidence >= this.unsafeConfidenceThreshold) {
       return {
         decision: 'rejected',
         confidence,
