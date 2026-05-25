@@ -167,9 +167,10 @@ def moderate(post: Post):
    emb, probs = get_moderation_results(post.text)
    
    # ── 1. Classifier decision (Fine-tuned XLM-R head) ──
-   # Label 0 = NOT_TOXIC (safe), Label 1 = TOXIC (unsafe)
-   safe_score = float(probs[0])
-   toxic_score = float(probs[1])
+   # The labels have been reversed during training.
+   # Now: Label 0 = TOXIC (unsafe), Label 1 = NOT_TOXIC (safe)
+   safe_score = float(probs[1])
+   toxic_score = float(probs[0])
    is_safe_by_classifier = safe_score > 0.5
 
    # ── 2. Vector context check (Golden CSV) ──
@@ -179,8 +180,8 @@ def moderate(post: Post):
    vector_confidence = float(sims[0][best_idx])
 
    label_value = label.tolist() if hasattr(label, 'tolist') else label
-   child_safe_by_vector = bool(label_value[0]) if isinstance(label_value, list) else bool(label_value)
-   adult_safe_by_vector = bool(label_value[1]) if isinstance(label_value, list) else bool(label_value)
+   child_safe_by_vector = not bool(label_value[0]) if isinstance(label_value, list) else not bool(label_value)
+   adult_safe_by_vector = not bool(label_value[1]) if isinstance(label_value, list) else not bool(label_value)
 
    # ── 3. Hybrid decision ──
    flag_for_review = False
