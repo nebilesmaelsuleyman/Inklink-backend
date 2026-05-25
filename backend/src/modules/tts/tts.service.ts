@@ -34,7 +34,9 @@ export class TtsService {
       if (!chunk.trim()) continue;
 
       try {
-        this.logger.debug(`Chunk ${i + 1}/${chunks.length}: "${chunk.substring(0, 40)}..."`);
+        this.logger.debug(
+          `Chunk ${i + 1}/${chunks.length}: "${chunk.substring(0, 40)}..."`,
+        );
         const buf = await this.fetchGoogleTTS(chunk, language);
         if (buf.length > 0) {
           buffers.push(buf);
@@ -48,11 +50,13 @@ export class TtsService {
     if (buffers.length === 0) {
       throw new Error(
         'TTS synthesis failed: could not generate audio for any chunk. ' +
-        'Check network connectivity to translate.google.com.',
+          'Check network connectivity to translate.google.com.',
       );
     }
 
-    this.logger.log(`Synthesis complete. Returning ${buffers.length} buffers concatenated.`);
+    this.logger.log(
+      `Synthesis complete. Returning ${buffers.length} buffers concatenated.`,
+    );
     return Buffer.concat(buffers);
   }
 
@@ -73,8 +77,8 @@ export class TtsService {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
           '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Referer': 'https://translate.google.com/',
-        'Accept': 'audio/mpeg,audio/*;q=0.9,*/*;q=0.8',
+        Referer: 'https://translate.google.com/',
+        Accept: 'audio/mpeg,audio/*;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
       },
     });

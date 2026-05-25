@@ -77,7 +77,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       if (socket && socket.readyState === WebSocket.OPEN) {
         socket.send(payload);
       }
-      
+
       if (recipientId !== senderId) {
         // Always create a persistent notification for the recipient
         await this.notificationsService.createMessageNotification(

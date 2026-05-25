@@ -97,7 +97,7 @@ export class CollaborationGateway
     client.send(MessageProtocol.encode(MessageType.Sync, state));
 
     // initial awareness (if any)
-    const awarenessClientIds = Array.from(room.awareness.getStates().keys()) as number[];
+    const awarenessClientIds = Array.from(room.awareness.getStates().keys());
     if (awarenessClientIds.length > 0) {
       const awarenessUpdate = awarenessProtocol.encodeAwarenessUpdate(
         room.awareness,
@@ -221,7 +221,7 @@ export class CollaborationGateway
       const cookieName =
         this.configService.get<string>('auth.cookieName') || 'auth_token';
       const cookieToken = this.getCookieValue(req?.headers?.cookie, cookieName);
-      
+
       const token = bearerToken || cookieToken || ticketToken;
       if (!token) return null;
 

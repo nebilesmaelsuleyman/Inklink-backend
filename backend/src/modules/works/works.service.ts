@@ -14,7 +14,7 @@ import { ReactionsService } from '../reactions/reactions.service';
 import { CollaborationService } from '../collaboration/collaboration.service';
 import { CreateWorkDto } from './dto/create-work.dto';
 import { UpdateWorkDto } from './dto/update-work.dto';
-import { WORK_MODEL_NAME, WorkDocument } from './schema/work.schema';
+import { WORK_MODEL_NAME, WorkDocument, WorkStatus } from './schema/work.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/schemas/notification.schema';
 import { Profile } from '../profile/profile.type';
@@ -137,6 +137,99 @@ export class WorksService {
     }
   }
 
+  private isModerationServiceUnavailable(reason?: string) {
+    return Boolean(reason && reason.includes('moderation_service_unavailable'));
+  }
+
+  private async applyWorkModerationResult(
+    workId: Types.ObjectId,
+    title: string,
+    summary: string,
+    moderationFields: {
+      status: WorkStatus;
+      moderationConfidence: number;
+      moderationReason: string;
+      childSafe: boolean;
+      adultSafe: boolean;
+      moderationUpdatedAt: Date;
+      reviewedBy?: undefined;
+      reviewedAt?: undefined;
+    },
+  ) {
+    const updated = await this.workModel
+      .findOneAndUpdate(
+        {
+          _id: workId,
+          title,
+          summary,
+        },
+        {
+          $set: {
+            moderationConfidence: moderationFields.moderationConfidence,
+            moderationReason: moderationFields.moderationReason,
+            childSafe: moderationFields.childSafe,
+            adultSafe: moderationFields.adultSafe,
+            moderationUpdatedAt: moderationFields.moderationUpdatedAt,
+            reviewedBy: undefined,
+            reviewedAt: undefined,
+            status: moderationFields.status,
+          },
+        },
+        { returnDocument: 'after' },
+      )
+      .lean()
+      .exec();
+
+    return updated ?? null;
+  }
+
+  private queueWorkModeration(
+    workId: Types.ObjectId,
+    title: string,
+    summary: string,
+    attempt = 0,
+  ) {
+    const delayMs = Math.min(1000 * 2 ** attempt, 30000);
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const moderationFields = await this.evaluateAndBuildModerationFields(
+            [title, summary].join('\n\n'),
+          );
+
+          if (
+            this.isModerationServiceUnavailable(moderationFields.moderationReason) &&
+            attempt < 5
+          ) {
+            this.queueWorkModeration(workId, title, summary, attempt + 1);
+            return;
+          }
+
+          const updated = await this.applyWorkModerationResult(
+            workId,
+            title,
+            summary,
+            moderationFields,
+          );
+
+          if (!updated && attempt < 5) {
+            this.queueWorkModeration(workId, title, summary, attempt + 1);
+            return;
+          }
+
+          if (!updated) {
+            console.warn(
+              '[WorksService] Skipped stale background moderation update',
+              workId.toString(),
+            );
+          }
+        } catch (err) {
+          console.error('[WorksService] Background moderation failed:', err);
+        }
+      })();
+    }, 100);
+  }
+
   private async assertWorkOwner(workId: Types.ObjectId, requesterId: string) {
     const ownerId = this.toObjectId(requesterId, 'requesterId');
     const owned = await this.workModel.exists({
@@ -171,20 +264,41 @@ export class WorksService {
     const title = (createWorkDto.title || '').trim();
     if (!title) throw new BadRequestException('title is required');
 
-    const moderationFields = await this.evaluateAndBuildModerationFields(
-      [title, createWorkDto.summary || ''].join('\n\n'),
-    );
+    const summary = (createWorkDto.summary || '').trim();
+    const initialStatus: WorkStatus = createWorkDto.status ?? 'draft';
 
     const created = await this.workModel.create({
       authorId,
       title,
-      summary: (createWorkDto.summary || '').trim(),
+      summary,
       coverImage: createWorkDto.coverImage,
       tags: this.normalizeTags(createWorkDto.tags),
-      ...moderationFields,
+      status: initialStatus,
+      moderationConfidence: 0,
+      moderationReason: 'moderation_queued',
+      moderationUpdatedAt: new Date(),
+      childSafe: undefined,
+      adultSafe: undefined,
+      reviewedBy: undefined,
+      reviewedAt: undefined,
     });
 
-    return this.mapWork(created.toObject());
+    const moderationFields = await this.evaluateAndBuildModerationFields(
+      [title, summary].join('\n\n'),
+    );
+
+    const updated = await this.applyWorkModerationResult(
+      created._id,
+      title,
+      summary,
+      moderationFields,
+    );
+
+    if (this.isModerationServiceUnavailable(moderationFields.moderationReason)) {
+      this.queueWorkModeration(created._id, title, summary);
+    }
+
+    return this.mapWork(updated ?? created.toObject());
   }
 
   async list(requesterId: string, authorId?: string) {
@@ -467,28 +581,6 @@ export class WorksService {
       updatePayload.status = updateWorkDto.status;
     }
 
-    if (
-      typeof updatePayload.title === 'string' ||
-      typeof updatePayload.summary === 'string'
-    ) {
-      const current = await this.workModel.findById(workId).lean().exec();
-      if (!current) throw new NotFoundException('Work not found');
-
-      const nextTitle =
-        typeof updatePayload.title === 'string'
-          ? updatePayload.title
-          : current.title;
-      const nextSummary =
-        typeof updatePayload.summary === 'string'
-          ? updatePayload.summary
-          : current.summary || '';
-
-      const moderationFields = await this.evaluateAndBuildModerationFields(
-        [nextTitle, nextSummary].join('\n\n'),
-      );
-      Object.assign(updatePayload, moderationFields);
-    }
-
     const updated = await this.workModel
       .findByIdAndUpdate(
         workId,
@@ -498,6 +590,37 @@ export class WorksService {
       .lean()
       .exec();
     if (!updated) throw new NotFoundException('Work not found');
+
+    if (
+      typeof updatePayload.title === 'string' ||
+      typeof updatePayload.summary === 'string'
+    ) {
+      const nextTitle =
+        typeof updatePayload.title === 'string'
+          ? updatePayload.title
+          : updated.title;
+      const nextSummary =
+        typeof updatePayload.summary === 'string'
+          ? updatePayload.summary
+          : updated.summary || '';
+
+      const moderationFields = await this.evaluateAndBuildModerationFields(
+        [nextTitle, nextSummary].join('\n\n'),
+      );
+
+      const moderated = await this.applyWorkModerationResult(
+        workId,
+        nextTitle,
+        nextSummary,
+        moderationFields,
+      );
+
+      if (this.isModerationServiceUnavailable(moderationFields.moderationReason)) {
+        this.queueWorkModeration(workId, nextTitle, nextSummary);
+      }
+
+      return this.mapWork(moderated ?? updated);
+    }
 
     return this.mapWork(updated);
   }
@@ -513,6 +636,66 @@ export class WorksService {
     if (existing.status === 'rejected') {
       throw new BadRequestException(
         'This work has been rejected by moderation and cannot be published.',
+      );
+    }
+
+    if (
+      existing.status === 'pending_moderation' ||
+      existing.status === 'needs_admin_review'
+    ) {
+      throw new BadRequestException(
+        'This work is still under moderation review. Please wait for the result before publishing.',
+      );
+    }
+
+    if (existing.status === 'draft') {
+      const moderationFields = await this.evaluateAndBuildModerationFields(
+        [existing.title, existing.summary || ''].join('\n\n'),
+      );
+
+      if (moderationFields.status === 'rejected') {
+        await this.workModel.findByIdAndUpdate(
+          workId,
+          {
+            $set: {
+              ...moderationFields,
+              status: 'rejected',
+            },
+          },
+          { returnDocument: 'after' },
+        );
+
+        throw new BadRequestException(
+          'This work has been rejected by moderation and cannot be published.',
+        );
+      }
+
+      if (moderationFields.status === 'needs_admin_review') {
+        await this.workModel.findByIdAndUpdate(
+          workId,
+          {
+            $set: {
+              ...moderationFields,
+              status: 'needs_admin_review',
+            },
+          },
+          { returnDocument: 'after' },
+        );
+
+        throw new BadRequestException(
+          'This work needs admin review before it can be published.',
+        );
+      }
+
+      await this.workModel.findByIdAndUpdate(
+        workId,
+        {
+          $set: {
+            ...moderationFields,
+            status: 'approved',
+          },
+        },
+        { returnDocument: 'after' },
       );
     }
 
@@ -564,31 +747,37 @@ export class WorksService {
     // Notify followers
     if (nextStatus === 'published' && existing.status !== 'published') {
       try {
-        const authorProfile = await this.profileModel.findById(updated.authorId);
+        const authorProfile = await this.profileModel.findById(
+          updated.authorId,
+        );
         if (
           authorProfile &&
           authorProfile.followers &&
           authorProfile.followers.length > 0
         ) {
-          const notificationPromises = authorProfile.followers.map((followerId) =>
-            this.notificationsService.createNotification({
-              userId: followerId,
-              type: NotificationType.ANNOUNCEMENT,
-              title: `New Book: ${updated.title}`,
-              description: `${authorProfile.username} just published a new book: ${updated.summary.substring(0, 100)}${updated.summary.length > 100 ? '...' : ''}`,
-              metadata: {
-                authorName: authorProfile.username,
-                authorImage: authorProfile.profilePicture,
-                bookTitle: updated.title,
-                bookImage: updated.coverImage,
-                referenceId: updated._id.toString(),
-              },
-            } as any),
+          const notificationPromises = authorProfile.followers.map(
+            (followerId) =>
+              this.notificationsService.createNotification({
+                userId: followerId,
+                type: NotificationType.ANNOUNCEMENT,
+                title: `New Book: ${updated.title}`,
+                description: `${authorProfile.username} just published a new book: ${updated.summary.substring(0, 100)}${updated.summary.length > 100 ? '...' : ''}`,
+                metadata: {
+                  authorName: authorProfile.username,
+                  authorImage: authorProfile.profilePicture,
+                  bookTitle: updated.title,
+                  bookImage: updated.coverImage,
+                  referenceId: updated._id.toString(),
+                },
+              } as any),
           );
           await Promise.all(notificationPromises);
         }
       } catch (err) {
-        console.error('Failed to notify followers about book publication:', err);
+        console.error(
+          'Failed to notify followers about book publication:',
+          err,
+        );
       }
     }
 
@@ -610,13 +799,11 @@ export class WorksService {
       chapterStatusQuery = { $in: ['needs_admin_review', 'rejected'] };
     }
 
-    const flaggedWorkIds = await this.chaptersService.getFlaggedWorkIds(chapterStatusQuery);
+    const flaggedWorkIds =
+      await this.chaptersService.getFlaggedWorkIds(chapterStatusQuery);
 
     const query = {
-      $or: [
-        { status: workStatusQuery },
-        { _id: { $in: flaggedWorkIds } },
-      ],
+      $or: [{ status: workStatusQuery }, { _id: { $in: flaggedWorkIds } }],
     };
 
     const queue = await this.workModel

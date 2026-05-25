@@ -221,7 +221,9 @@ export class AdminService {
     const parentProfiles = await this.profileModel
       .find({
         username: {
-          $in: parentUsers.map((parent: any) => parent.username).filter(Boolean),
+          $in: parentUsers
+            .map((parent: any) => parent.username)
+            .filter(Boolean),
         },
       })
       .lean()
@@ -259,8 +261,7 @@ export class AdminService {
         parentId: user.parentId?.toString() || '',
         parentUsername: parentUser?.username || '',
         parentEmail: parentUser?.email || '',
-        parentName:
-          parentProfile?.name || parentUser?.username || '',
+        parentName: parentProfile?.name || parentUser?.username || '',
         parentProfileImage: parentProfile?.profilePicture || '',
       };
     });
@@ -426,7 +427,11 @@ export class AdminService {
     });
   }
 
-  async publishContent(id: string, adminId?: string, options?: { childSafe?: boolean; adultSafe?: boolean }) {
+  async publishContent(
+    id: string,
+    adminId?: string,
+    options?: { childSafe?: boolean; adultSafe?: boolean },
+  ) {
     const updated = await this.chapterModel
       .findByIdAndUpdate(
         id,

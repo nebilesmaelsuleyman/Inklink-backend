@@ -113,7 +113,9 @@ export class AuthController {
 
   @Get('ws-ticket')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get a short-lived ticket for WebSocket authentication' })
+  @ApiOperation({
+    summary: 'Get a short-lived ticket for WebSocket authentication',
+  })
   @ApiCookieAuth('auth_token')
   @ApiOkResponse({ description: 'Ticket generated' })
   async getWsTicket(@Req() request: MaybeAuthenticatedRequest) {

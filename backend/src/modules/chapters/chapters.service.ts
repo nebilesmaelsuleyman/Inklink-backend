@@ -107,6 +107,10 @@ export class ChaptersService {
     }
   }
 
+  private isModerationServiceUnavailable(reason?: string) {
+    return Boolean(reason && reason.includes('moderation_service_unavailable'));
+  }
+
   private async ensureWorkExists(workId: Types.ObjectId) {
     const exists = await this.workModel.exists({ _id: workId });
     if (!exists) throw new NotFoundException('Work not found');
@@ -237,17 +241,37 @@ export class ChaptersService {
     );
   }
 
-  private moderateInBackground(chapterId: string, title: string, content: string) {
+  private moderateInBackground(
+    chapterId: string,
+    title: string,
+    content: string,
+    attempt = 0,
+  ) {
     // Background execution without blocking the event loop
+    const delayMs = Math.min(1000 * 2 ** attempt, 30000);
     setTimeout(async () => {
       try {
         const text = [title, content].join('\n\n');
-        const moderationResult = await this.evaluateAndBuildModerationFields(text);
-        await this.chapterModel.findByIdAndUpdate(chapterId, { $set: moderationResult }).exec();
+        const moderationResult =
+          await this.evaluateAndBuildModerationFields(text);
+
+        if (
+          this.isModerationServiceUnavailable(
+            moderationResult.moderationReason,
+          ) &&
+          attempt < 5
+        ) {
+          this.moderateInBackground(chapterId, title, content, attempt + 1);
+          return;
+        }
+
+        await this.chapterModel
+          .findByIdAndUpdate(chapterId, { $set: moderationResult })
+          .exec();
       } catch (err) {
         console.error('[ChaptersService] Background moderation failed:', err);
       }
-    }, 100);
+    }, delayMs);
   }
 
   async create(
@@ -282,14 +306,36 @@ export class ChaptersService {
       moderationConfidence: 0,
     });
 
-    // Run moderation in background so it doesn't block the request if the Python service takes time to wake up
-    this.moderateInBackground(created._id.toString(), title, createChapterDto.contentText || '');
+    const moderationFields = await this.evaluateAndBuildModerationFields(
+      [title, createChapterDto.contentText || ''].join('\n\n'),
+    );
+
+    const updated = await this.chapterModel
+      .findByIdAndUpdate(
+        created._id,
+        {
+          $set: moderationFields,
+        },
+        { returnDocument: 'after' },
+      )
+      .lean()
+      .exec();
+
+    if (
+      this.isModerationServiceUnavailable(moderationFields.moderationReason)
+    ) {
+      this.moderateInBackground(
+        created._id.toString(),
+        title,
+        createChapterDto.contentText || '',
+      );
+    }
 
     // Fire-and-forget: notify bookmarkers of this work
     void this.dispatchChapterNotifications(parsedWorkId, title);
     await this.workAggregationService.recomputeAndPersist(parsedWorkId);
 
-    return this.mapChapter(created.toObject());
+    return this.mapChapter(updated ?? created.toObject());
   }
 
   async update(
@@ -323,6 +369,17 @@ export class ChaptersService {
       updatePayload.price = updateChapterDto.price;
     }
 
+    const updated = await this.chapterModel
+      .findByIdAndUpdate(
+        chapterId,
+        { $set: updatePayload },
+        { returnDocument: 'after' },
+      )
+      .lean()
+      .exec();
+
+    if (!updated) throw new NotFoundException('Chapter not found');
+
     if (
       typeof updateChapterDto.title === 'string' ||
       typeof updateChapterDto.contentText === 'string'
@@ -336,22 +393,31 @@ export class ChaptersService {
           ? updatePayload.contentText
           : currentChapter.contentText || '';
 
-      updatePayload.moderationStatus = 'needs_admin_review';
-      updatePayload.moderationConfidence = 0;
+      const moderationFields = await this.evaluateAndBuildModerationFields(
+        [nextTitle, nextContent].join('\n\n'),
+      );
 
-      this.moderateInBackground(chapterId.toString(), nextTitle, nextContent);
+      const moderated = await this.chapterModel
+        .findByIdAndUpdate(
+          chapterId,
+          { $set: moderationFields },
+          { returnDocument: 'after' },
+        )
+        .lean()
+        .exec();
+
+      if (
+        this.isModerationServiceUnavailable(
+          moderationFields.moderationReason,
+        )
+      ) {
+        this.moderateInBackground(chapterId.toString(), nextTitle, nextContent);
+      }
+
+      await this.workAggregationService.recomputeAndPersist(parsedWorkId);
+      return this.mapChapter(moderated ?? updated);
     }
 
-    const updated = await this.chapterModel
-      .findByIdAndUpdate(
-        chapterId,
-        { $set: updatePayload },
-        { returnDocument: 'after' },
-      )
-      .lean()
-      .exec();
-
-    if (!updated) throw new NotFoundException('Chapter not found');
     await this.workAggregationService.recomputeAndPersist(parsedWorkId);
     return this.mapChapter(updated);
   }
@@ -454,9 +520,11 @@ export class ChaptersService {
       .select('workId')
       .lean()
       .exec();
-    
+
     // Deduplicate work IDs
-    const uniqueIds = Array.from(new Set(chapters.map((c) => c.workId.toString())));
+    const uniqueIds = Array.from(
+      new Set(chapters.map((c) => c.workId.toString())),
+    );
     return uniqueIds.map((id) => new Types.ObjectId(id));
   }
 }
