@@ -351,7 +351,7 @@ export class WorksService {
   }
 
   async browse(requesterId?: string, role?: string, tag?: string) {
-    const matchQuery: any = { status: 'published' };
+    const matchQuery: any = { status: { $in: ['published', 'approved'] } };
     if (tag) {
       matchQuery.tags = tag;
     }
@@ -466,7 +466,7 @@ export class WorksService {
       { $unwind: '$author' },
       {
         $match: {
-          status: 'published',
+          status: { $in: ['published', 'approved'] },
           ...(role === 'child' ? { childSafe: true } : {}),
           $or: [
             { title: searchRegex },
@@ -516,8 +516,10 @@ export class WorksService {
       );
     }
 
-    // Non-published works are only visible to their owner or collaborators
-    if (work.status !== 'published') {
+    const isPublicWork = work.status === 'published' || work.status === 'approved';
+
+    // Non-public works are only visible to their owner or collaborators
+    if (!isPublicWork) {
       if (!requesterId) {
         throw new ForbiddenException('Authentication required');
       }
@@ -536,7 +538,7 @@ export class WorksService {
     // Use public listing (no ownership check) for published works;
     // fall back to owner-only listing for drafts etc.
     const chapters =
-      work.status === 'published'
+      isPublicWork
         ? await this.chaptersService.listPublicByWork(id, requesterId)
         : await this.chaptersService.listByWork(id, requesterId!);
 
@@ -556,7 +558,7 @@ export class WorksService {
       return { ...chapter, ...summary };
     });
 
-    if (work.status === 'published' && chaptersWithReactions.length === 0) {
+    if (isPublicWork && chaptersWithReactions.length === 0) {
       throw new NotFoundException('Work not found');
     }
 
