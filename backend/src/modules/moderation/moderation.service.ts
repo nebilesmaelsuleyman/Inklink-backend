@@ -177,11 +177,11 @@ export class ModerationService {
     // Tier 2: adult-only content → route to admin for age-gate decision
     if (!childSafe && adultSafe) {
       return {
-        decision: 'needs_admin_review',
+        decision: 'approved',
         confidence,
         childSafe,
         adultSafe,
-        reason: 'adult_only_content_requires_age_gate_review',
+        reason: 'adult_only_auto_approved_child_blocked',
       };
     }
 

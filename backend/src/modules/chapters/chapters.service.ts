@@ -551,21 +551,41 @@ export class ChaptersService implements OnApplicationBootstrap {
         return;
       }
 
+      const nowMs = Date.now();
+      const retryAfterMs = 5 * 60 * 1000;
+
       // 1. Process Chapters in needs_admin_review
       const chapters = await this.chapterModel
         .find({ moderationStatus: 'needs_admin_review' })
         .exec();
 
       for (const chapter of chapters) {
-        const text = [chapter.title, chapter.contentText || ''].join('\n\n');
-        const moderationResult = await this.evaluateAndBuildModerationFields(text);
+        try {
+          const updatedAtMs = chapter.moderationUpdatedAt
+            ? new Date(chapter.moderationUpdatedAt).getTime()
+            : 0;
+          const isStale = !updatedAtMs || nowMs - updatedAtMs >= retryAfterMs;
+          const wasFallback = this.isModerationServiceUnavailable(
+            chapter.moderationReason,
+          );
+          if (!isStale && !wasFallback) continue;
+
+          const text = [chapter.title, chapter.contentText || ''].join('\n\n');
+          const moderationResult = await this.evaluateAndBuildModerationFields(
+            text,
+            this.moderationRequestTimeoutMs,
+          );
         
-        if (moderationResult.moderationStatus !== 'needs_admin_review') {
-          await this.chapterModel.findByIdAndUpdate(chapter._id, {
-            $set: moderationResult,
-          }).exec();
-          
+          await this.chapterModel
+            .findByIdAndUpdate(chapter._id, { $set: moderationResult })
+            .exec();
+
           await this.workAggregationService.recomputeAndPersist(chapter.workId);
+        } catch (err) {
+          console.error(
+            '[ChaptersService] Failed processing chapter in moderation queue:',
+            err,
+          );
         }
       }
 
@@ -575,22 +595,46 @@ export class ChaptersService implements OnApplicationBootstrap {
         .exec();
 
       for (const work of works) {
-        const text = [work.title, work.summary || ''].join('\n\n');
-        const moderationResult = await this.evaluateAndBuildModerationFields(text);
+        try {
+          const updatedAtMs = work.moderationUpdatedAt
+            ? new Date(work.moderationUpdatedAt).getTime()
+            : 0;
+          const isStale = !updatedAtMs || nowMs - updatedAtMs >= retryAfterMs;
+          const wasFallback = this.isModerationServiceUnavailable(
+            work.moderationReason,
+          );
+          if (!isStale && !wasFallback) continue;
+
+          const text = [work.title, work.summary || ''].join('\n\n');
+          const moderationResult = await this.evaluateAndBuildModerationFields(
+            text,
+            this.moderationRequestTimeoutMs,
+          );
         
-        if (moderationResult.moderationStatus !== 'needs_admin_review') {
-          await this.workModel.findByIdAndUpdate(work._id, {
-            $set: {
-              moderationConfidence: moderationResult.moderationConfidence,
-              moderationReason: moderationResult.moderationReason,
-              childSafe: moderationResult.childSafe,
-              adultSafe: moderationResult.adultSafe,
-              moderationUpdatedAt: moderationResult.moderationUpdatedAt,
-              status: moderationResult.moderationStatus === 'approved' ? 'approved' : moderationResult.moderationStatus === 'rejected' ? 'rejected' : 'needs_admin_review'
-            }
-          }).exec();
+          await this.workModel
+            .findByIdAndUpdate(work._id, {
+              $set: {
+                moderationConfidence: moderationResult.moderationConfidence,
+                moderationReason: moderationResult.moderationReason,
+                childSafe: moderationResult.childSafe,
+                adultSafe: moderationResult.adultSafe,
+                moderationUpdatedAt: moderationResult.moderationUpdatedAt,
+                status:
+                  moderationResult.moderationStatus === 'approved'
+                    ? 'approved'
+                    : moderationResult.moderationStatus === 'rejected'
+                      ? 'rejected'
+                      : 'needs_admin_review',
+              },
+            })
+            .exec();
 
           await this.workAggregationService.recomputeAndPersist(work._id);
+        } catch (err) {
+          console.error(
+            '[ChaptersService] Failed processing work in moderation queue:',
+            err,
+          );
         }
       }
     } catch (err) {
