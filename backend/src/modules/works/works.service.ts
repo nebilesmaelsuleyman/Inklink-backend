@@ -53,6 +53,14 @@ export class WorksService {
     );
   }
 
+  private publishBlockedException(message: string, work?: any) {
+    return new BadRequestException({
+      message,
+      code: 'WORK_PUBLISH_BLOCKED',
+      work: work ? this.mapWork(work) : undefined,
+    });
+  }
+
   private mapWork(work: any) {
     return {
       id: work._id.toString(),
@@ -98,9 +106,9 @@ export class WorksService {
     );
   }
 
-  private async evaluateAndBuildModerationFields(text: string, customTimeoutMs?: number) {
+  private async evaluateAndBuildModerationFields(text: string) {
     try {
-      const result = await this.moderationService.moderateText(text, customTimeoutMs);
+      const result = await this.moderationService.moderateText(text);
       const status =
         result.decision === 'approved'
           ? 'approved'
@@ -138,12 +146,7 @@ export class WorksService {
   }
 
   private isModerationServiceUnavailable(reason?: string) {
-    if (!reason) return false;
-    const normalized = reason.toLowerCase();
-    return (
-      normalized.includes('moderation_service_unavailable') ||
-      normalized.includes('moderation service unavailable')
-    );
+    return Boolean(reason && reason.includes('moderation_service_unavailable'));
   }
 
   private async applyWorkModerationResult(
@@ -232,7 +235,7 @@ export class WorksService {
           console.error('[WorksService] Background moderation failed:', err);
         }
       })();
-    }, 100);
+    }, delayMs);
   }
 
   private async assertWorkOwner(workId: Types.ObjectId, requesterId: string) {
@@ -290,7 +293,6 @@ export class WorksService {
 
     const moderationFields = await this.evaluateAndBuildModerationFields(
       [title, summary].join('\n\n'),
-      3000,
     );
 
     const updated = await this.applyWorkModerationResult(
@@ -612,7 +614,6 @@ export class WorksService {
 
       const moderationFields = await this.evaluateAndBuildModerationFields(
         [nextTitle, nextSummary].join('\n\n'),
-        3000,
       );
 
       const moderated = await this.applyWorkModerationResult(
@@ -641,8 +642,9 @@ export class WorksService {
 
     // If the work was rejected, disallow publishing.
     if (existing.status === 'rejected') {
-      throw new BadRequestException(
+      throw this.publishBlockedException(
         'This work has been rejected by moderation and cannot be published.',
+        existing,
       );
     }
 
@@ -657,40 +659,47 @@ export class WorksService {
     if (existing.status === 'draft') {
       const moderationFields = await this.evaluateAndBuildModerationFields(
         [existing.title, existing.summary || ''].join('\n\n'),
-        3000,
       );
 
       if (moderationFields.status === 'rejected') {
-        await this.workModel.findByIdAndUpdate(
-          workId,
-          {
-            $set: {
-              ...moderationFields,
-              status: 'rejected',
+        const updated = await this.workModel
+          .findByIdAndUpdate(
+            workId,
+            {
+              $set: {
+                ...moderationFields,
+                status: 'rejected',
+              },
             },
-          },
-          { returnDocument: 'after' },
-        );
+            { returnDocument: 'after' },
+          )
+          .lean()
+          .exec();
 
-        throw new BadRequestException(
+        throw this.publishBlockedException(
           'This work has been rejected by moderation and cannot be published.',
+          updated ?? existing,
         );
       }
 
       if (moderationFields.status === 'needs_admin_review') {
-        await this.workModel.findByIdAndUpdate(
-          workId,
-          {
-            $set: {
-              ...moderationFields,
-              status: 'needs_admin_review',
+        const updated = await this.workModel
+          .findByIdAndUpdate(
+            workId,
+            {
+              $set: {
+                ...moderationFields,
+                status: 'needs_admin_review',
+              },
             },
-          },
-          { returnDocument: 'after' },
-        );
+            { returnDocument: 'after' },
+          )
+          .lean()
+          .exec();
 
-        throw new BadRequestException(
+        throw this.publishBlockedException(
           'This work needs admin review before it can be published.',
+          updated ?? existing,
         );
       }
 

@@ -26,6 +26,8 @@ import { WorkAggregationService } from '../work-aggregation/work-aggregation.ser
 
 @Injectable()
 export class ChaptersService implements OnApplicationBootstrap {
+  private backgroundModeratorInterval: NodeJS.Timeout | null = null;
+
   onApplicationBootstrap() {
     this.startBackgroundModerator();
   }
@@ -595,7 +597,9 @@ export class ChaptersService implements OnApplicationBootstrap {
   }
 
   private startBackgroundModerator() {
-    setInterval(() => {
+    if (this.backgroundModeratorInterval) return;
+
+    this.backgroundModeratorInterval = setInterval(() => {
       void this.processNeedsAdminReviewQueue();
     }, 300000); // 5 minutes
   }
