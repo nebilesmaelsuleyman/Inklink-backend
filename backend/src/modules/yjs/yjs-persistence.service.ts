@@ -184,6 +184,46 @@ export class YjsPersistenceService {
     return { doc, lastSeq };
   }
 
+  private extractPlainText(doc: Y.Doc) {
+    const parts: string[] = [];
+    try {
+      doc.share.forEach((value: any) => {
+        if (value instanceof Y.Text) {
+          const t = value.toString();
+          if (t && t.trim()) parts.push(t.trim());
+        }
+      });
+    } catch {
+      // ignore
+    }
+    const text = parts.join('\n\n').trim();
+    return text;
+  }
+
+  /**
+   * Materialize plaintext chapter content from persisted Yjs updates/snapshots.
+   * Useful when the editor stores content only in Yjs and chapter.contentText is empty.
+   */
+  async materializeChapterContent(chapterId: string) {
+    const parsedChapterId = this.toObjectId(chapterId, 'chapterId');
+
+    const yjsDoc = await this.yjsDocumentModel
+      .findOne({ chapterId: parsedChapterId })
+      .lean()
+      .exec();
+    if (!yjsDoc) return { ok: false, reason: 'no_yjs_document' };
+
+    const { doc } = await this.computeState(new Types.ObjectId(yjsDoc._id));
+    const plainText = this.extractPlainText(doc);
+    if (!plainText) return { ok: false, reason: 'no_plain_text' };
+
+    await this.chapterModel
+      .updateOne({ _id: parsedChapterId }, { $set: { contentText: plainText } })
+      .exec();
+
+    return { ok: true, chapterId, length: plainText.length };
+  }
+
   async appendUpdate(docId: string, requesterId: string, base64Update: string) {
     const yjsDoc = await this.resolveDocument(docId, requesterId);
     const documentId = new Types.ObjectId(yjsDoc._id);

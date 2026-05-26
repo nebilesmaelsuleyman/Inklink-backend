@@ -4,14 +4,18 @@ import {
   Get,
   Param,
   Post,
+  Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBody,
   ApiCookieAuth,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -99,6 +103,35 @@ export class SubscriptionController {
       request.user.sub,
       returnUrl || `http://localhost:3000/book/chapter/${chapterId}`,
     );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('chapters/:chapterId/unlock')
+  @ApiOperation({
+    summary: 'Redirect to Chapa checkout to unlock a single locked chapter',
+  })
+  @ApiParam({ name: 'chapterId', description: 'Chapter id' })
+  @ApiQuery({
+    name: 'returnUrl',
+    required: false,
+    description:
+      'Where Chapa should redirect the user after payment (defaults to frontend chapter page)',
+  })
+  @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+  async unlockChapterRedirect(
+    @Param('chapterId') chapterId: string,
+    @Query('returnUrl') returnUrl: string | undefined,
+    @Req() request: AuthenticatedRequest,
+    @Res() res: Response,
+  ) {
+    const { checkoutUrl } =
+      await this.subscriptionService.initChapterPurchasePayment(
+        chapterId,
+        request.user.sub,
+        returnUrl || `http://localhost:3000/book/chapter/${chapterId}`,
+      );
+
+    return res.redirect(checkoutUrl);
   }
 
   @UseGuards(JwtAuthGuard)

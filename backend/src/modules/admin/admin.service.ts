@@ -24,6 +24,7 @@ import {
   SubscriptionDocument,
 } from '../subscription/schema/subscription.schema';
 import { WorkAggregationService } from '../work-aggregation/work-aggregation.service';
+import { YjsPersistenceService } from '../yjs/yjs-persistence.service';
 
 type PricingPlan = {
   id: string;
@@ -65,6 +66,19 @@ export class AdminService {
     'admin-pricing.json',
   );
 
+  private normalizeBoolean(value: any, defaultValue: boolean): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+      const v = value.trim().toLowerCase();
+      if (v === 'true') return true;
+      if (v === 'false') return false;
+      if (v === '1') return true;
+      if (v === '0') return false;
+    }
+    return defaultValue;
+  }
+
   constructor(
     @InjectModel(USER_MODEL_NAME)
     private readonly userModel: Model<UserDocument>,
@@ -79,6 +93,7 @@ export class AdminService {
     @InjectModel(SUBSCRIPTION_MODEL_NAME)
     private readonly subscriptionModel: Model<SubscriptionDocument>,
     private readonly workAggregationService: WorkAggregationService,
+    private readonly yjsPersistenceService: YjsPersistenceService,
   ) {}
 
   async getRevenue() {
@@ -432,6 +447,9 @@ export class AdminService {
     adminId?: string,
     options?: { childSafe?: boolean; adultSafe?: boolean },
   ) {
+    const childSafe = this.normalizeBoolean(options?.childSafe, true);
+    const adultSafe = this.normalizeBoolean(options?.adultSafe, true);
+
     const updated = await this.chapterModel
       .findByIdAndUpdate(
         id,
@@ -440,8 +458,8 @@ export class AdminService {
             moderationStatus: 'approved',
             moderationReason: 'approved_by_admin',
             moderationUpdatedAt: new Date(),
-            childSafe: options?.childSafe ?? true,
-            adultSafe: options?.adultSafe ?? true,
+            childSafe,
+            adultSafe,
           },
         },
         { returnDocument: 'after' },
@@ -450,6 +468,19 @@ export class AdminService {
       .exec();
 
     if (!updated) throw new NotFoundException('Content not found');
+
+    try {
+      if (!String((updated as any).contentText || '').trim()) {
+        await this.yjsPersistenceService.materializeChapterContent(
+          updated._id.toString(),
+        );
+      }
+    } catch (err) {
+      console.warn(
+        '[AdminService] Failed to materialize chapter content from Yjs:',
+        err?.message || err,
+      );
+    }
 
     await this.workAggregationService.recomputeAndPersist(
       new Types.ObjectId((updated as any).workId),

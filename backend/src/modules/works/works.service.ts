@@ -21,6 +21,22 @@ import { Profile } from '../profile/profile.type';
 
 @Injectable()
 export class WorksService {
+  private normalizeBoolean(
+    value: any,
+    defaultValue: boolean,
+  ): boolean {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+      const v = value.trim().toLowerCase();
+      if (v === 'true') return true;
+      if (v === 'false') return false;
+      if (v === '1') return true;
+      if (v === '0') return false;
+    }
+    return defaultValue;
+  }
+
   constructor(
     @InjectModel(WORK_MODEL_NAME)
     private readonly workModel: Model<WorkDocument>,
@@ -561,10 +577,6 @@ export class WorksService {
       return { ...chapter, ...summary };
     });
 
-    if (isPublicWork && chaptersWithReactions.length === 0) {
-      throw new NotFoundException('Work not found');
-    }
-
     return {
       ...this.mapWork({ ...work, authorId: authorIdStr }),
       authorUsername,
@@ -873,6 +885,9 @@ export class WorksService {
     const workId = this.toObjectId(id);
     const reviewerId = this.toObjectId(adminId, 'adminId');
 
+    const childSafe = this.normalizeBoolean(options?.childSafe, true);
+    const adultSafe = this.normalizeBoolean(options?.adultSafe, true);
+
     const updated = await this.workModel
       .findByIdAndUpdate(
         workId,
@@ -883,8 +898,8 @@ export class WorksService {
             reviewedBy: reviewerId,
             reviewedAt: new Date(),
             moderationUpdatedAt: new Date(),
-            childSafe: options?.childSafe ?? true,
-            adultSafe: options?.adultSafe ?? true,
+            childSafe,
+            adultSafe,
           },
         },
         { returnDocument: 'after' },
