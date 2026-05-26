@@ -12,6 +12,7 @@ import { WORK_MODEL_NAME, WorkSchema } from '../works/schema/work.schema';
 import { ChaptersController } from './chapters.controller';
 import { ChaptersService } from './chapters.service';
 import { CHAPTER_MODEL_NAME, ChapterSchema } from './schema/chapter.schema';
+import { PublicChaptersController } from './public-chapters.controller';
 
 @Module({
   imports: [
@@ -28,7 +29,7 @@ import { CHAPTER_MODEL_NAME, ChapterSchema } from './schema/chapter.schema';
       { name: USER_MODEL_NAME, schema: UserSchema },
     ]),
   ],
-  controllers: [ChaptersController],
+  controllers: [ChaptersController, PublicChaptersController],
   providers: [ChaptersService],
   exports: [ChaptersService],
 })

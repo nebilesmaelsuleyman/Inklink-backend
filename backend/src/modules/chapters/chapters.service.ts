@@ -63,6 +63,69 @@ export class ChaptersService implements OnApplicationBootstrap {
     return this.chapterModel.findById(chapterId).exec();
   }
 
+  /**
+   * Public chapter fetch used by the reader UI.
+   * - Only returns chapters that are approved and belong to a public work.
+   * - If chapter is locked (price > 0), content is stripped unless the requester has access.
+   */
+  async getPublicById(
+    chapterId: string,
+    requesterId?: string,
+    role?: string,
+  ) {
+    const parsedChapterId = this.toObjectId(chapterId, 'chapterId');
+
+    const chapter = await this.chapterModel.findById(parsedChapterId).lean().exec();
+    if (!chapter) throw new NotFoundException('Chapter not found');
+
+    if (chapter.moderationStatus !== 'approved') {
+      throw new NotFoundException('Chapter not found');
+    }
+
+    const work = await this.workModel
+      .findById(chapter.workId)
+      .select('status childSafe')
+      .lean()
+      .exec();
+
+    const isPublicWork =
+      work?.status === 'published' || work?.status === 'approved';
+    if (!work || !isPublicWork) throw new NotFoundException('Chapter not found');
+
+    if (role === 'child' && !work.childSafe) {
+      throw new ForbiddenException(
+        'This work is not accessible in Children Mode',
+      );
+    }
+
+    const mapped = this.mapChapter(chapter);
+    let access:
+      | {
+          hasAccess: boolean;
+          accessType: 'free' | 'purchase' | 'subscription' | 'author' | 'none';
+          price: number;
+          isPremiumSubscriber: boolean;
+        }
+      | undefined;
+
+    if ((chapter.price || 0) > 0) {
+      access = await this.subscriptionService.checkAccess(
+        chapter._id.toString(),
+        requesterId,
+      );
+      if (!access.hasAccess) mapped.contentText = '';
+    } else {
+      access = {
+        hasAccess: true,
+        accessType: 'free',
+        price: 0,
+        isPremiumSubscriber: false,
+      };
+    }
+
+    return { ...mapped, access };
+  }
+
   private mapChapter(chapter: any) {
     return {
       id: chapter._id.toString(),
