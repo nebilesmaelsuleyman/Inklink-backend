@@ -351,19 +351,7 @@ export class WorksService {
   }
 
   async browse(requesterId?: string, role?: string, tag?: string) {
-    const matchQuery: any = { status: { $in: ['published', 'approved'] } };
-    if (tag) {
-      matchQuery.tags = tag;
-    }
-
-    if (role === 'child') {
-      matchQuery.childSafe = true;
-    }
-
     const works = await this.workModel.aggregate([
-      {
-        $match: matchQuery,
-      },
       {
         $lookup: {
           from: 'chapters',
@@ -375,12 +363,7 @@ export class WorksService {
                   $and: [
                     { $eq: ['$workId', '$$workId'] },
                     { $eq: ['$moderationStatus', 'approved'] },
-                    {
-                      $regexMatch: {
-                        input: { $ifNull: ['$contentText', ''] },
-                        regex: /\S/,
-                      },
-                    },
+                    // consider any approved chapter regardless of contentText
                   ],
                 },
               },
@@ -392,7 +375,13 @@ export class WorksService {
       },
       {
         $match: {
-          'visibleChapters.0': { $exists: true },
+          ...(tag ? { tags: tag } : {}),
+          ...(role === 'child' ? { childSafe: true } : {}),
+          status: { $ne: 'rejected' },
+          $or: [
+            { status: { $in: ['published', 'approved'] } },
+            { 'visibleChapters.0': { $exists: true } },
+          ],
         },
       },
       {
@@ -404,6 +393,9 @@ export class WorksService {
     ]);
 
     const mapped = works.map((work) => this.mapWork(work));
+    const authorMap = await this.getAuthorUsernameMap(
+      works.map((work: any) => work.authorId),
+    );
 
     // Enrich with aggregated reaction counts from chapters
     const workIds = mapped.map((w) => w.id);
@@ -416,7 +408,11 @@ export class WorksService {
         commentsCount: 0,
         viewsCount: 0,
       };
-      return { ...work, ...summary };
+      return {
+        ...work,
+        ...summary,
+        authorUsername: authorMap.get(work.authorId) || undefined,
+      };
     });
   }
 
@@ -435,12 +431,7 @@ export class WorksService {
                   $and: [
                     { $eq: ['$workId', '$$workId'] },
                     { $eq: ['$moderationStatus', 'approved'] },
-                    {
-                      $regexMatch: {
-                        input: { $ifNull: ['$contentText', ''] },
-                        regex: /\S/,
-                      },
-                    },
+                    // consider any approved chapter regardless of contentText
                   ],
                 },
               },
@@ -448,11 +439,6 @@ export class WorksService {
             { $limit: 1 },
           ],
           as: 'visibleChapters',
-        },
-      },
-      {
-        $match: {
-          'visibleChapters.0': { $exists: true },
         },
       },
       {
@@ -466,8 +452,12 @@ export class WorksService {
       { $unwind: '$author' },
       {
         $match: {
-          status: { $in: ['published', 'approved'] },
           ...(role === 'child' ? { childSafe: true } : {}),
+          status: { $ne: 'rejected' },
+          $or: [
+            { status: { $in: ['published', 'approved'] } },
+            { 'visibleChapters.0': { $exists: true } },
+          ],
           $or: [
             { title: searchRegex },
             { 'author.username': searchRegex },
