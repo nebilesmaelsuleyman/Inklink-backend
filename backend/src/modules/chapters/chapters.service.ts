@@ -27,6 +27,7 @@ import { WorkAggregationService } from '../work-aggregation/work-aggregation.ser
 @Injectable()
 export class ChaptersService implements OnApplicationBootstrap {
   private backgroundModeratorInterval: NodeJS.Timeout | null = null;
+  private readonly moderationRequestTimeoutMs = 15000;
 
   onApplicationBootstrap() {
     this.startBackgroundModerator();
@@ -119,6 +120,7 @@ export class ChaptersService implements OnApplicationBootstrap {
     const normalized = reason.toLowerCase();
     return (
       normalized.includes('moderation_service_unavailable') ||
+      normalized.includes('moderation_request_timeout') ||
       normalized.includes('moderation service unavailable')
     );
   }
@@ -320,7 +322,7 @@ export class ChaptersService implements OnApplicationBootstrap {
 
     const moderationFields = await this.evaluateAndBuildModerationFields(
       [title, createChapterDto.contentText || ''].join('\n\n'),
-      3000,
+      this.moderationRequestTimeoutMs,
     );
 
     const updated = await this.chapterModel
@@ -408,7 +410,7 @@ export class ChaptersService implements OnApplicationBootstrap {
 
       const moderationFields = await this.evaluateAndBuildModerationFields(
         [nextTitle, nextContent].join('\n\n'),
-        3000,
+        this.moderationRequestTimeoutMs,
       );
 
       const moderated = await this.chapterModel

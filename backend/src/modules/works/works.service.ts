@@ -146,7 +146,12 @@ export class WorksService {
   }
 
   private isModerationServiceUnavailable(reason?: string) {
-    return Boolean(reason && reason.includes('moderation_service_unavailable'));
+    if (!reason) return false;
+    const normalized = reason.toLowerCase();
+    return (
+      normalized.includes('moderation_service_unavailable') ||
+      normalized.includes('moderation_request_timeout')
+    );
   }
 
   private async applyWorkModerationResult(

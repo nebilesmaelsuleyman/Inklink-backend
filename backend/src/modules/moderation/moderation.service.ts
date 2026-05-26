@@ -79,12 +79,28 @@ export class ModerationService {
     }
 
     const activeTimeout = customTimeoutMs || this.timeoutMs;
-    const response = await fetch(`${this.baseUrl}/moderate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: bodyText }),
-      signal: AbortSignal.timeout(activeTimeout),
-    }).catch(() => null);
+    let response: Response | null = null;
+    try {
+      response = await fetch(`${this.baseUrl}/moderate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: bodyText }),
+        signal: AbortSignal.timeout(activeTimeout),
+      });
+    } catch (err: any) {
+      const isTimeout =
+        err?.name === 'AbortError' ||
+        String(err?.code || '').toLowerCase() === 'aborted';
+      return {
+        decision: 'needs_admin_review',
+        confidence: 0,
+        childSafe: false,
+        adultSafe: false,
+        reason: isTimeout
+          ? 'moderation_request_timeout_fallback'
+          : 'moderation_service_unavailable_fallback',
+      };
+    }
 
     if (!response || !response.ok) {
       return {
