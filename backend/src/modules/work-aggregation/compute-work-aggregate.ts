@@ -57,9 +57,11 @@ export function computeNextWorkStatus(
   currentStatus: WorkStatus,
   derivedStatus: DerivedWorkStatus,
 ): WorkStatus {
-  return currentStatus === 'published' && derivedStatus === 'approved'
-    ? 'published'
-    : derivedStatus;
+  if (currentStatus === 'published') {
+    // Once published, keep it published unless chapter moderation conclusively rejects it.
+    return derivedStatus === 'rejected' ? 'rejected' : 'published';
+  }
+  return derivedStatus;
 }
 
 function safeDate(value: any): Date | undefined {

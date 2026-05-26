@@ -59,7 +59,7 @@ describe('computeWorkAggregateFromChapters', () => {
     ]);
 
     expect(computeNextWorkStatus('published', aggregate.derivedStatus)).toBe(
-      'needs_admin_review',
+      'published',
     );
     expect(computeNextWorkStatus('published', 'approved')).toBe('published');
   });
