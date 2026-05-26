@@ -351,6 +351,19 @@ export class WorksService {
   }
 
   async browse(requesterId?: string, role?: string, tag?: string) {
+    const escapeRegex = (value: string) =>
+      value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const normalizedTag = (tag || '').trim();
+    const tagMatch = normalizedTag
+      ? {
+          tags: {
+            $elemMatch: {
+              $regex: new RegExp(`^${escapeRegex(normalizedTag)}$`, 'i'),
+            },
+          },
+        }
+      : {};
+
     const works = await this.workModel.aggregate([
       {
         $lookup: {
@@ -375,7 +388,7 @@ export class WorksService {
       },
       {
         $match: {
-          ...(tag ? { tags: tag } : {}),
+          ...tagMatch,
           ...(role === 'child' ? { childSafe: true } : {}),
           status: { $ne: 'rejected' },
           $or: [
