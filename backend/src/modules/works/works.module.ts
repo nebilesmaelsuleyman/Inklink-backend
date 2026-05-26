@@ -10,18 +10,25 @@ import { CollaborationModule } from '../collaboration/collaboration.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ProfileSchema } from '../profile/profile.model';
 import { TtsModule } from '../tts/tts.module';
+import {
+  CHAPTER_MODEL_NAME,
+  ChapterSchema,
+} from '../chapters/schema/chapter.schema';
+import { YjsModule } from '../yjs/yjs.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([
       { name: WORK_MODEL_NAME, schema: WorkSchema },
       { name: 'Profile', schema: ProfileSchema },
+      { name: CHAPTER_MODEL_NAME, schema: ChapterSchema },
     ]),
     ChaptersModule,
     ReactionsModule,
     ModerationModule,
     NotificationsModule,
     TtsModule,
+    YjsModule,
     forwardRef(() => CollaborationModule),
   ],
   controllers: [WorksController],

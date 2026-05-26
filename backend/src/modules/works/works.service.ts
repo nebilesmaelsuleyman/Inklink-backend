@@ -18,6 +18,11 @@ import { WORK_MODEL_NAME, WorkDocument, WorkStatus } from './schema/work.schema'
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/schemas/notification.schema';
 import { Profile } from '../profile/profile.type';
+import {
+  CHAPTER_MODEL_NAME,
+  ChapterDocument,
+} from '../chapters/schema/chapter.schema';
+import { YjsPersistenceService } from '../yjs/yjs-persistence.service';
 
 @Injectable()
 export class WorksService {
@@ -40,6 +45,8 @@ export class WorksService {
   constructor(
     @InjectModel(WORK_MODEL_NAME)
     private readonly workModel: Model<WorkDocument>,
+    @InjectModel(CHAPTER_MODEL_NAME)
+    private readonly chapterModel: Model<ChapterDocument>,
     private readonly chaptersService: ChaptersService,
     private readonly reactionsService: ReactionsService,
     private readonly moderationService: ModerationService,
@@ -48,6 +55,7 @@ export class WorksService {
     private readonly notificationsService: NotificationsService,
     @InjectModel('Profile')
     private readonly profileModel: Model<Profile>,
+    private readonly yjsPersistenceService: YjsPersistenceService,
   ) {}
 
   async findOneById(id: string) {
@@ -908,6 +916,54 @@ export class WorksService {
       .exec();
 
     if (!updated) throw new NotFoundException('Work not found');
+
+    // If admin approves the work, ensure any pending chapters become publicly readable too.
+    // Otherwise readers will see "no chapters" even though content exists.
+    await this.chapterModel
+      .updateMany(
+        {
+          workId,
+          moderationStatus: 'needs_admin_review',
+        } as any,
+        {
+          $set: {
+            moderationStatus: 'approved',
+            moderationReason: 'approved_by_admin',
+            moderationUpdatedAt: new Date(),
+            childSafe,
+            adultSafe,
+          },
+        },
+      )
+      .exec();
+
+    // Best-effort: materialize plaintext content for newly-approved chapters if they only have Yjs content.
+    try {
+      const emptyContentChapters = await this.chapterModel
+        .find({
+          workId,
+          moderationStatus: 'approved',
+          $or: [{ contentText: { $exists: false } }, { contentText: '' }],
+        } as any)
+        .select('_id')
+        .limit(20)
+        .lean()
+        .exec();
+
+      await Promise.all(
+        emptyContentChapters.map((c: any) =>
+          this.yjsPersistenceService.materializeChapterContent(
+            c._id.toString(),
+          ),
+        ),
+      );
+    } catch (err) {
+      console.warn(
+        '[WorksService] Failed to materialize chapter content after admin approval:',
+        err?.message || err,
+      );
+    }
+
     return this.mapWork(updated);
   }
   async adminReject(id: string, adminId: string) {
